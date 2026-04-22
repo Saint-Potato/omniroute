@@ -85,90 +85,89 @@ with DAG(
     # ──────────────────────────────────────────
     # SILVER — Cleanse, dedup, enrich
     # ──────────────────────────────────────────
-    with TaskGroup("silver") as silver:
-
-        transform_assignment = BashOperator(
-            task_id="transform_vehicle_assignment",
-            bash_command=spark_cmd(
-                "batch/transform_vehicle_assignment.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
-
-        transform_fuel = BashOperator(
-            task_id="transform_fuel_transactions",
-            bash_command=spark_cmd(
-                "batch/transform_fuel_transactions.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
+    # with TaskGroup("silver") as silver:
+    #
+    #     transform_assignment = BashOperator(
+    #         task_id="transform_vehicle_assignment",
+    #         bash_command=spark_cmd(
+    #             "batch/transform_vehicle_assignment.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
+    #
+    #     transform_fuel = BashOperator(
+    #         task_id="transform_fuel_transactions",
+    #         bash_command=spark_cmd(
+    #             "batch/transform_fuel_transactions.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
 
     # ──────────────────────────────────────────
     # GOLD — Business logic
     # ──────────────────────────────────────────
-    with TaskGroup("gold") as gold:
-
-        build_scd2 = BashOperator(
-            task_id="build_asset_history_scd2",
-            bash_command=spark_cmd(
-                "batch/build_asset_history_scd2.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
-
-        build_fuel_audit = BashOperator(
-            task_id="build_fuel_efficiency_audit",
-            bash_command=spark_cmd(
-                "batch/build_fuel_efficiency_audit.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
-
-        build_fleet_snapshot = BashOperator(
-            task_id="build_active_fleet_snapshot",
-            bash_command=spark_cmd(
-                "batch/build_active_fleet_snapshot.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
+    # with TaskGroup("gold") as gold:
+    #
+    #     build_scd2 = BashOperator(
+    #         task_id="build_asset_history_scd2",
+    #         bash_command=spark_cmd(
+    #             "batch/build_asset_history_scd2.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
+    #
+    #     build_fuel_audit = BashOperator(
+    #         task_id="build_fuel_efficiency_audit",
+    #         bash_command=spark_cmd(
+    #             "batch/build_fuel_efficiency_audit.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
+    #
+    #     build_fleet_snapshot = BashOperator(
+    #         task_id="build_active_fleet_snapshot",
+    #         bash_command=spark_cmd(
+    #             "batch/build_active_fleet_snapshot.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
 
     # ──────────────────────────────────────────
     # REPORTING — Load DB + generate exports
     # ──────────────────────────────────────────
-    with TaskGroup("reporting") as reporting:
-
-        load_postgres = BashOperator(
-            task_id="load_reporting_db",
-            bash_command=spark_cmd(
-                "batch/load_reporting_db.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
-
-        generate_reports = BashOperator(
-            task_id="generate_reports",
-            bash_command=spark_cmd(
-                "batch/generate_reports.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
+    # with TaskGroup("reporting") as reporting:
+    #
+    #     load_postgres = BashOperator(
+    #         task_id="load_reporting_db",
+    #         bash_command=spark_cmd(
+    #             "batch/load_reporting_db.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
+    #
+    #     generate_reports = BashOperator(
+    #         task_id="generate_reports",
+    #         bash_command=spark_cmd(
+    #             "batch/generate_reports.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
 
     # ──────────────────────────────────────────
     # Task Dependencies
     # ──────────────────────────────────────────
 
     # Bronze → Silver
-    # transform_assignment needs both registry (for VIN validation) and assignment
-    [ingest_registry, ingest_assignment] >> transform_assignment
-    # transform_fuel needs registry (for model lookup) and fuel data
-    [ingest_registry, ingest_fuel] >> transform_fuel
+    # [ingest_registry, ingest_assignment] >> transform_assignment
+    # [ingest_registry, ingest_fuel] >> transform_fuel
 
     # Silver → Gold
-    transform_assignment >> build_scd2
-    build_scd2 >> build_fuel_audit
-    transform_fuel >> build_fuel_audit
-    build_scd2 >> build_fleet_snapshot
+    # transform_assignment >> build_scd2
+    # build_scd2 >> build_fuel_audit
+    # transform_fuel >> build_fuel_audit
+    # build_scd2 >> build_fleet_snapshot
 
     # Gold → Reporting
-    [build_fuel_audit, build_fleet_snapshot] >> load_postgres
-    load_postgres >> generate_reports
+    # [build_fuel_audit, build_fleet_snapshot] >> load_postgres
+    # load_postgres >> generate_reports
+    pass
