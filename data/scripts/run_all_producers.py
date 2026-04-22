@@ -15,8 +15,8 @@ import subprocess
 
 BASE_DIR = ROOT_DIR
 
-DATA_SCRIPTS = os.path.join(BASE_DIR, "data_producer_scripts")
-STREAMING_SCRIPTS = os.path.join(BASE_DIR, "streaming_data_producer")
+DATA_SCRIPTS = CURRENT_DIR
+STREAMING_SCRIPTS = CURRENT_DIR
 
 PYTHON_EXEC = sys.executable
 
@@ -59,11 +59,11 @@ def main():
     print("\nSTARTING FULL DATA PIPELINE\n")
 
     scripts = [
-        ("vehicle_registry.py", "Vehicle Registry"),
-        ("vehicle_assignment.py", "Vehicle Assignment"),
-        ("maintenance_schedules.py", "Maintenance Schedules"),
-        ("fuel_transactions.py", "Fuel Transactions"),
-        ("restricted_zones_generator.py", "Restricted Zones"),
+        ("vehicle_registry_producer.py", "Vehicle Registry"),
+        ("vehicle_assignment_producer.py", "Vehicle Assignment"),
+        ("maintenance_schedules_producer.py", "Maintenance Schedules"),
+        ("fuel_transactions_producer.py", "Fuel Transactions"),
+        ("restricted_zones_producer.py", "Restricted Zones"),
     ]
 
     for script, name in scripts:

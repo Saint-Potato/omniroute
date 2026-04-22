@@ -1,11 +1,9 @@
 import sys
 import os
 
-CURRENT_DIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
-
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
+CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
 
 import json
 import time
@@ -131,6 +129,64 @@ def generate_event(vin, driver_id, zones):
     return event
 
 
+def inject_edge_cases(producer, topic_name, zones):
+    # 1. Double Violation Cap Test
+    # speed > 110 AND inside restricted zone
+    zone = zones[0] if zones else {"min_lat": 10, "max_lat": 11, "min_long": 10, "max_long": 11}
+    event_double = {
+        "vin": "VIN-DOUBLE-VIOLATION",
+        "driver_id": "DRV_DOUBLE",
+        "speed": 115,
+        "lat": zone["min_lat"] + 0.0001,
+        "long": zone["min_long"] + 0.0001,
+        "event_timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    producer.send(topic_name, key=b"VIN-DOUBLE-VIOLATION", value=event_double)
+    
+    # 2. Suspension Test (11 strikes in a row)
+    for i in range(11):
+        event_suspension = {
+            "vin": "VIN-SUSPENSION",
+            "driver_id": "DRV-SUSPENSION",
+            "speed": 125,
+            "lat": 0,
+            "long": 0,
+            "event_timestamp": (datetime.utcnow() + timedelta(seconds=i)).strftime("%Y-%m-%d %H:%M:%S")
+        }
+        producer.send(topic_name, key=b"VIN-SUSPENSION", value=event_suspension)
+    
+    # 3. Late arriving data
+    event_late = {
+        "vin": "VIN-LATE",
+        "driver_id": "DRV_LATE",
+        "speed": 60,
+        "lat": 0, "long": 0,
+        "event_timestamp": (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+    }
+    producer.send(topic_name, key=b"VIN-LATE", value=event_late)
+    
+    # 3.5 The Anonymous Truck (Missing Driver-ID to force Stream-Static Join)
+    event_anonymous = {
+        "vin": "1HGBH225", # A real VIN from the registry sample
+        "driver_id": "",   # Missing! The stream MUST join with Asset History to find out who this is.
+        "speed": 115,
+        "lat": 0, "long": 0,
+        "event_timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    producer.send(topic_name, key=b"1HGBH225", value=event_anonymous)
+
+    # 4. Bad JSON / Schema Breaker for DLQ
+    event_dlq = {
+        "driver_id": "DRV_BAD",
+        "speed": "WAY TOO FAST", 
+        "lat": 0, "long": 0,
+        "event_timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    producer.send(topic_name, key=b"DLQ_TEST", value=event_dlq)
+    
+    producer.flush()
+    print("Injected advanced BRD edge cases into Kafka.")
+
 # ================================
 # MAIN PRODUCER
 # ================================
@@ -153,6 +209,9 @@ def run_producer():
     print(f"Loaded {len(vins)} vehicles")
     print(f"Loaded {len(assignments)} active assignments")
     print(f"Loaded {len(zones)} restricted zones")
+
+    # Inject static BRD edge cases before the infinite loop
+    inject_edge_cases(producer, KAFKA_TOPIC, zones)
 
     print("Starting telemetry stream in batches... Press Ctrl+C to stop.\n")
     BATCH_SIZE = 50

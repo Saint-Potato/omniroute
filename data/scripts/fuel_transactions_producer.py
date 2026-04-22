@@ -1,11 +1,9 @@
 import sys
 import os
 
-CURRENT_DIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
-
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
+CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
 
 import csv
 import random
@@ -117,6 +115,34 @@ def add_edge_cases(data, vins):
 
     total = len(data)
 
+    if len(vins) > 1:
+        # --- BRD REQUIREMENT: Maintenance Exclusion Test ---
+        data.append({
+            "transaction_id": "TXN_MAINT_TEST",
+            "vin": vins[0],  # Matches the maintenance generated VIN from other script
+            "fuel_liters": 200, 
+            "odometer_reading": 30500, # Ensures terrible efficiency
+            "timestamp": "2026-05-10 14:00:00"
+        })
+
+        # --- BRD REQUIREMENT: The Weekend Exclusion Test (2026-05-17 is a Sunday) ---
+        data.append({
+            "transaction_id": "TXN_WEEKEND_TEST",
+            "vin": vins[1],
+            "fuel_liters": 200, 
+            "odometer_reading": 40500, 
+            "timestamp": "2026-05-17 14:00:00"
+        })
+        
+        # --- BRD REQUIREMENT: The Baseline Deviation Anomaly (Weekday) ---
+        data.append({
+            "transaction_id": "TXN_BAD_EFF_TEST",
+            "vin": vins[0],         
+            "fuel_liters": 200, 
+            "odometer_reading": 50500, 
+            "timestamp": "2026-05-12 14:00:00" # Tuesday
+        })
+
     for _ in range(int(total * 0.01)):
         data.append(random.choice(data).copy())
 
@@ -128,20 +154,6 @@ def add_edge_cases(data, vins):
     for _ in range(int(total * 0.005)):
         row = random.choice(data).copy()
         row["odometer_reading"] -= random.randint(100, 500)
-        data.append(row)
-
-    for _ in range(int(total * 0.005)):
-        data.append({
-            "transaction_id": f"TXN_BAD_{random.randint(1000,9999)}",
-            "vin": "INVALID_VIN",
-            "fuel_liters": 50,
-            "odometer_reading": 20000,
-            "timestamp": "2026-04-10 10:00:00"
-        })
-
-    for _ in range(int(total * 0.005)):
-        row = random.choice(data).copy()
-        row["fuel_liters"] = ""
         data.append(row)
 
     return data

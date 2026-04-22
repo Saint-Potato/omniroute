@@ -1,11 +1,9 @@
 import sys
 import os
 
-CURRENT_DIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
-
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
+CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
 
 import csv
 import random
@@ -123,44 +121,55 @@ def generate_assignments(vins):
 
 def add_edge_cases(data, vins):
 
-    if len(data) > 3 and len(vins) > 3:
+    now_utc = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # --- BRD REQUIREMENT: The Driver Swap ---
+    swap_date = to_unix(datetime(2026, 4, 15))
+    data.append({
+        "vin": "VIN-SWAP-TEST",
+        "driver_id": "DRV_SWAP_1",
+        "start_timestamp": to_unix(datetime(2026, 4, 1)),
+        "end_timestamp": swap_date,
+        "daily_rate": 500.0,
+        "region": "North"
+    })
+    data.append({
+        "vin": "VIN-SWAP-TEST",
+        "driver_id": "DRV_SWAP_2",
+        "start_timestamp": swap_date,
+        "end_timestamp": "",
+        "daily_rate": 550.0,
+        "region": "North"
+    })
 
-        sample = data[0].copy()
-        sample["daily_rate"] = 400
-        data.append(sample)
+    # --- BRD REQUIREMENT: Conflict Resolution ---
+    conflict_date = to_unix(datetime(2026, 5, 20))
+    data.append({
+        "vin": "VIN-CONFLICT-TEST",
+        "driver_id": "DRV_CONF_A",
+        "start_timestamp": conflict_date,
+        "end_timestamp": "",
+        "daily_rate": 400.0,
+        "region": "South"
+    })
+    data.append({
+        "vin": "VIN-CONFLICT-TEST",
+        "driver_id": "DRV_CONF_B",
+        "start_timestamp": conflict_date,
+        "end_timestamp": "",
+        "daily_rate": 600.0,
+        "region": "South"
+    })
 
-        dup = sample.copy()
-        dup["daily_rate"] = 600
-        data.append(dup)
-
-        now_utc = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-
-        data.append({
-            "vin": vins[1],
-            "driver_id": "DRV_OVER1",
-            "start_timestamp": to_unix(now_utc - timedelta(days=20)),
-            "end_timestamp": to_unix(now_utc - timedelta(days=5)),
-            "daily_rate": 500,
-            "region": "North"
-        })
-
-        data.append({
-            "vin": vins[1],
-            "driver_id": "DRV_OVER2",
-            "start_timestamp": to_unix(now_utc - timedelta(days=10)),
-            "end_timestamp": "",
-            "daily_rate": 550,
-            "region": "North"
-        })
-
-        data.append({
-            "vin": "INVALID123",
-            "driver_id": "DRV_BAD",
-            "start_timestamp": to_unix(now_utc + timedelta(days=10)),
-            "end_timestamp": "",
-            "daily_rate": 500,
-            "region": "South"
-        })
+    # Existing basic error cases
+    data.append({
+        "vin": "INVALID123",
+        "driver_id": "DRV_BAD",
+        "start_timestamp": to_unix(now_utc + timedelta(days=10)),
+        "end_timestamp": "",
+        "daily_rate": 500,
+        "region": "South"
+    })
 
     return data
 

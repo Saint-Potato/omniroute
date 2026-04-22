@@ -1,11 +1,9 @@
 import sys
 import os
 
-CURRENT_DIR = os.path.dirname(__file__)
-ROOT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
-
-if ROOT_DIR not in sys.path:
-    sys.path.append(ROOT_DIR)
+CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
 
 import csv
 import random
@@ -83,37 +81,23 @@ def add_edge_cases(data, vins):
 
     total = len(data)
 
-    for _ in range(int(total * 0.01)):
-        data.append(random.choice(data).copy())
-
-    for _ in range(int(total * 0.01)):
-        vin = random.choice(vins)
-        service_date = "2026-06-15"
-
+    # --- BRD REQUIREMENT: Maintenance Exclusion Test ---
+    # We force a valid VIN (e.g. vins[0]) to have maintenance on 2026-05-10
+    if len(vins) > 0:
         data.append({
-            "vin": vin,
-            "service_date": service_date,
+            "vin": vins[0],
+            "service_date": "2026-05-10",
             "service_type": "Engine Overhaul"
         })
 
-        data.append({
-            "vin": vin,
-            "service_date": service_date,
-            "service_type": "Tire Rotation"
-        })
+    for _ in range(int(total * 0.01)):
+        data.append(random.choice(data).copy())
 
     for _ in range(int(total * 0.005)):
         data.append({
             "vin": "INVALID_" + str(random.randint(1000, 9999)),
             "service_date": "2026-05-10",
             "service_type": "Oil Change"
-        })
-
-    for _ in range(int(total * 0.005)):
-        data.append({
-            "vin": random.choice(vins),
-            "service_date": "2026-07-20",
-            "service_type": ""
         })
 
     for _ in range(int(total * 0.005)):

@@ -40,10 +40,11 @@ try:
 except ImportError:
     KafkaConsumer = None
 
-# Add ROOT_DIR to sys.path directly to ensure imports work correctly
+# Add parent dir to sys.path directly to ensure imports work correctly
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-if CURRENT_DIR not in sys.path:
-    sys.path.insert(0, CURRENT_DIR)
+PARENT_DIR = os.path.abspath(os.path.join(CURRENT_DIR, ".."))
+if PARENT_DIR not in sys.path:
+    sys.path.insert(0, PARENT_DIR)
 
 from config import (
     TELEMETRY_CONFIG,

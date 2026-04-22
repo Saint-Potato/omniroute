@@ -6,7 +6,7 @@ import sys
 # ================================
 
 BASE_DIR = os.path.dirname(__file__)
-PROJECT_ROOT = BASE_DIR
+PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
 
 # ================================
 # DATA DIRECTORY
@@ -52,8 +52,8 @@ RESTRICTED_ZONES_RAW_FILE = os.path.join(RAW_DIR, "restricted_zones.json")
 # SCRIPT PATHS
 # ================================
 
-DATA_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "data_producer_scripts")
-STREAMING_SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "streaming_data_producer")
+DATA_SCRIPTS_DIR = BASE_DIR
+STREAMING_SCRIPTS_DIR = BASE_DIR
 
 # ================================
 # EXECUTION CONFIG
@@ -66,7 +66,7 @@ PYTHON_EXEC = sys.executable
 # ================================
 
 VEHICLE_REGISTRY_CONFIG = {
-    "NUM_RECORDS": 3000,
+    "NUM_RECORDS": 500,
     "MODELS": [
         "Freightliner M2",
         "Volvo VNL",
@@ -82,7 +82,7 @@ VEHICLE_REGISTRY_CONFIG = {
 # ================================
 
 VEHICLE_ASSIGNMENT_CONFIG = {
-    "NUM_ROWS": 120000,
+    "NUM_ROWS": 1800,
     "REGIONS": ["North", "South", "East", "West", "Central", "NCR", "Mumbai", "Jaipur"],
     "MIN_RATE": 300,
     "MAX_RATE": 1200
@@ -93,7 +93,7 @@ VEHICLE_ASSIGNMENT_CONFIG = {
 # ================================
 
 MAINTENANCE_CONFIG = {
-    "NUM_RECORDS": 9999,
+    "NUM_RECORDS": 1000,
     "SERVICE_TYPES": [
         "Engine Overhaul",
         "Tire Rotation",
@@ -109,7 +109,7 @@ MAINTENANCE_CONFIG = {
 # ================================
 
 FUEL_CONFIG = {
-    "NUM_RECORDS": 9999,
+    "NUM_RECORDS": 25000,
     "MIN_FUEL": 20,
     "MAX_FUEL": 150,
     "MIN_DISTANCE": 100,
