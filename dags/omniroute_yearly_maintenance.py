@@ -85,22 +85,23 @@ with DAG(
             ),
         )
 
-    # ──────────────────────────────────────────
-    # SILVER — Clean and deduplicate
-    # ──────────────────────────────────────────
-    with TaskGroup("silver") as silver:
+    # # ──────────────────────────────────────────
+    # # SILVER — Clean and deduplicate
+    # # ──────────────────────────────────────────
+    # with TaskGroup("silver") as silver:
 
-        clean_maintenance = BashOperator(
-            task_id="clean_maintenance_logs",
-            bash_command=spark_cmd(
-                "batch/clean_maintenance_logs.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
+    #     clean_maintenance = BashOperator(
+    #         task_id="clean_maintenance_logs",
+    #         bash_command=spark_cmd(
+    #             "batch/clean_maintenance_logs.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
 
-    # ──────────────────────────────────────────
-    # Task Dependencies
-    # ──────────────────────────────────────────
+    # # ──────────────────────────────────────────
+    # # Task Dependencies
+    # # ──────────────────────────────────────────
 
-    # Bronze → Silver
-    ingest_maintenance >> clean_maintenance
+    # # Bronze → Silver
+    # ingest_maintenance >> clean_maintenance
+    pass

@@ -72,35 +72,36 @@ with DAG(
     max_active_runs=1,
 ) as dag:
 
-    # ──────────────────────────────────────────
-    # GOLD — Reset driver strikes
-    # ──────────────────────────────────────────
-    with TaskGroup("gold") as gold:
+    # # ──────────────────────────────────────────
+    # # GOLD — Reset driver strikes
+    # # ──────────────────────────────────────────
+    # with TaskGroup("gold") as gold:
 
-        reset_strikes = BashOperator(
-            task_id="reset_driver_strikes",
-            bash_command=spark_cmd(
-                "batch/reset_driver_strikes.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
+    #     reset_strikes = BashOperator(
+    #         task_id="reset_driver_strikes",
+    #         bash_command=spark_cmd(
+    #             "batch/reset_driver_strikes.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
 
-    # ──────────────────────────────────────────
-    # REPORTING — Monthly rate deduction report
-    # ──────────────────────────────────────────
-    with TaskGroup("reporting") as reporting:
+    # # ──────────────────────────────────────────
+    # # REPORTING — Monthly rate deduction report
+    # # ──────────────────────────────────────────
+    # with TaskGroup("reporting") as reporting:
 
-        generate_report = BashOperator(
-            task_id="generate_rate_deduction_report",
-            bash_command=spark_cmd(
-                "batch/generate_rate_deduction_report.py",
-                f"--run-date {RUN_DATE}",
-            ),
-        )
+    #     generate_report = BashOperator(
+    #         task_id="generate_rate_deduction_report",
+    #         bash_command=spark_cmd(
+    #             "batch/generate_rate_deduction_report.py",
+    #             f"--run-date {RUN_DATE}",
+    #         ),
+    #     )
 
-    # ──────────────────────────────────────────
-    # Task Dependencies
-    # ──────────────────────────────────────────
+    # # ──────────────────────────────────────────
+    # # Task Dependencies
+    # # ──────────────────────────────────────────
 
-    # Gold → Reporting
-    reset_strikes >> generate_report
+    # # Gold → Reporting
+    # reset_strikes >> generate_report
+    pass

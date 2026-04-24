@@ -210,11 +210,11 @@ with DAG(
         python_callable=check_dq_threshold,
     )
 
-    # ──────────────────────────────────────────
-    # SILVER — Cleanse, dedup, enrich
-    # ──────────────────────────────────────────
+    # # ──────────────────────────────────────────
+    # # SILVER — Cleanse, dedup, enrich
+    # # ──────────────────────────────────────────
     # with TaskGroup("silver") as silver:
-    #
+
     #     transform_assignment = BashOperator(
     #         task_id="transform_vehicle_assignment",
     #         bash_command=spark_cmd(
@@ -222,7 +222,7 @@ with DAG(
     #             f"--run-date {RUN_DATE}",
     #         ),
     #     )
-    #
+
     #     transform_fuel = BashOperator(
     #         task_id="transform_fuel_transactions",
     #         bash_command=spark_cmd(
@@ -231,11 +231,11 @@ with DAG(
     #         ),
     #     )
 
-    # ──────────────────────────────────────────
-    # GOLD — Business logic
-    # ──────────────────────────────────────────
+    # # ──────────────────────────────────────────
+    # # GOLD — Business logic
+    # # ──────────────────────────────────────────
     # with TaskGroup("gold") as gold:
-    #
+
     #     build_scd2 = BashOperator(
     #         task_id="build_asset_history_scd2",
     #         bash_command=spark_cmd(
@@ -243,7 +243,7 @@ with DAG(
     #             f"--run-date {RUN_DATE}",
     #         ),
     #     )
-    #
+
     #     build_fuel_audit = BashOperator(
     #         task_id="build_fuel_efficiency_audit",
     #         bash_command=spark_cmd(
@@ -251,7 +251,7 @@ with DAG(
     #             f"--run-date {RUN_DATE}",
     #         ),
     #     )
-    #
+
     #     build_fleet_snapshot = BashOperator(
     #         task_id="build_active_fleet_snapshot",
     #         bash_command=spark_cmd(
@@ -260,11 +260,11 @@ with DAG(
     #         ),
     #     )
 
-    # ──────────────────────────────────────────
-    # REPORTING — Load DB + generate exports
-    # ──────────────────────────────────────────
+    # # ──────────────────────────────────────────
+    # # REPORTING — Load DB + generate exports
+    # # ──────────────────────────────────────────
     # with TaskGroup("reporting") as reporting:
-    #
+
     #     load_postgres = BashOperator(
     #         task_id="load_reporting_db",
     #         bash_command=spark_cmd(
@@ -272,7 +272,7 @@ with DAG(
     #             f"--run-date {RUN_DATE}",
     #         ),
     #     )
-    #
+
     #     generate_reports = BashOperator(
     #         task_id="generate_reports",
     #         bash_command=spark_cmd(
@@ -281,34 +281,34 @@ with DAG(
     #         ),
     #     )
 
-    # ──────────────────────────────────────────
-    # Task Dependencies
-    # ──────────────────────────────────────────
+    # # ──────────────────────────────────────────
+    # # Task Dependencies
+    # # ──────────────────────────────────────────
 
-    # S3 Sensors → Bronze (if available)
-    if HAS_S3_SENSOR:
-        wait_for_registry >> ingest_registry
-        wait_for_assignment >> ingest_assignment
-        wait_for_fuel >> ingest_fuel
+    # # S3 Sensors → Bronze (if available)
+    # if HAS_S3_SENSOR:
+    #     wait_for_registry >> ingest_registry
+    #     wait_for_assignment >> ingest_assignment
+    #     wait_for_fuel >> ingest_fuel
 
-    # Bronze → DQ Gate
-    [ingest_registry, ingest_assignment, ingest_fuel] >> dq_gate
+    # # Bronze → DQ Gate
+    # [ingest_registry, ingest_assignment, ingest_fuel] >> dq_gate
 
-    # DQ Gate → Silver
-    dq_gate >> transform_assignment
-    dq_gate >> transform_fuel
-    # transform_assignment also needs registry data (for VIN validation)
-    ingest_registry >> transform_assignment
-    # transform_fuel also needs registry data (for model lookup)
-    ingest_registry >> transform_fuel
+    # # DQ Gate → Silver
+    # dq_gate >> transform_assignment
+    # dq_gate >> transform_fuel
+    # # transform_assignment also needs registry data (for VIN validation)
+    # ingest_registry >> transform_assignment
+    # # transform_fuel also needs registry data (for model lookup)
+    # ingest_registry >> transform_fuel
 
-    # Silver → Gold
+    # # Silver → Gold
     # transform_assignment >> build_scd2
     # build_scd2 >> build_fuel_audit
     # transform_fuel >> build_fuel_audit
     # build_scd2 >> build_fleet_snapshot
 
-    # Gold → Reporting
+    # # Gold → Reporting
     # [build_fuel_audit, build_fleet_snapshot] >> load_postgres
     # load_postgres >> generate_reports
     pass
