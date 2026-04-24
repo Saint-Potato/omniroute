@@ -9,9 +9,11 @@ and generates the monthly rate deduction report.
 """
 
 from datetime import datetime, timedelta
-from airflow import DAG
-from airflow.operators.bash import BashOperator
-from airflow.utils.task_group import TaskGroup
+
+# Airflow 3.x imports — core authoring objects moved to airflow.sdk,
+# operators moved to airflow.providers.standard
+from airflow.sdk import DAG, TaskGroup
+from airflow.providers.standard.operators.bash import BashOperator
 
 
 # ──────────────────────────────────────────────
