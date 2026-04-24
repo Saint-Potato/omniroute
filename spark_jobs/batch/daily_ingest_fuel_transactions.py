@@ -1,15 +1,16 @@
 """
-Bronze Ingestion — Vehicle Assignment
-=======================================
-Reads vehicle_assignment.csv from the S3 landing zone, validates the file,
+Bronze Ingestion — Fuel Transactions
+======================================
+Reads fuel_transactions.csv from the S3 landing zone, validates the file,
 and writes it as Parquet to the ingested zone.
 
 This is a daily INCREMENTAL load — appends to the partition each run.
 
 Usage:
-    spark-submit spark_jobs/batch/ingest_vehicle_assignment.py --run-date 2026-04-16
+    spark-submit spark_jobs/batch/ingest_fuel_transactions.py --run-date 2026-04-16
 """
 
+import os
 import sys
 import uuid
 import argparse
@@ -18,7 +19,7 @@ from datetime import date
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit, current_timestamp, to_date
 from pyspark.sql.types import (
-    StructType, StructField, StringType, LongType, FloatType,
+    StructType, StructField, StringType, FloatType,
 )
 
 
@@ -26,20 +27,19 @@ from pyspark.sql.types import (
 # Schema definition (must match source CSV exactly)
 # ──────────────────────────────────────────────
 EXPECTED_SCHEMA = StructType([
+    StructField("transaction_id", StringType(), False),
     StructField("vin", StringType(), False),
-    StructField("driver_id", StringType(), False),
-    StructField("start_timestamp", LongType(), True),
-    StructField("end_timestamp", LongType(), True),
-    StructField("daily_rate", FloatType(), True),
-    StructField("region", StringType(), True),
+    StructField("fuel_liters", FloatType(), True),
+    StructField("odometer_reading", FloatType(), True),
+    StructField("timestamp", StringType(), True),
 ])
 
-SOURCE_FILENAME = "vehicle_assignment.csv"
+SOURCE_FILENAME = "fuel_transactions.csv"
 
-# S3 paths
-LANDING_PATH = "s3a://omniroute-bronze/landing"
-INGESTED_PATH = "s3a://omniroute-bronze/ingested/vehicle_assignment"
-QUARANTINE_PATH = "s3a://omniroute-bronze/quarantine"
+# S3 paths — loaded from environment variables
+LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://omniroute-bronze/landing/")
+INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://omniroute-bronze/ingested/") + "fuel_transactions"
+QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://omniroute-bronze/quarantine/")
 
 
 def validate_schema(df, expected_columns):
@@ -65,7 +65,7 @@ def run(spark: SparkSession, run_date: str):
     source = f"{LANDING_PATH}/{SOURCE_FILENAME}"
     quarantine = f"{QUARANTINE_PATH}/dt={run_date}/{SOURCE_FILENAME}"
 
-    print(f"[vehicle_assignment] Reading from: {source}")
+    print(f"[fuel_transactions] Reading from: {source}")
 
     try:
         df = (
@@ -92,11 +92,11 @@ def run(spark: SparkSession, run_date: str):
 
         # Write (incremental = append), partitioned by load_date
         df.write.mode("append").partitionBy("load_date").parquet(INGESTED_PATH)
-        print(f"[vehicle_assignment] ✓ Wrote {row_count} rows → {INGESTED_PATH}/load_date={run_date}")
+        print(f"[fuel_transactions] ✓ Wrote {row_count} rows → {INGESTED_PATH}/load_date={run_date}")
 
     except Exception as e:
-        print(f"[vehicle_assignment] ✗ Validation failed: {e}")
-        print(f"[vehicle_assignment] Moving to quarantine: {quarantine}")
+        print(f"[fuel_transactions] ✗ Validation failed: {e}")
+        print(f"[fuel_transactions] Moving to quarantine: {quarantine}")
         raw_df = spark.read.option("header", "true").csv(source)
         raw_df.write.mode("overwrite").parquet(quarantine)
         raise
@@ -110,7 +110,7 @@ if __name__ == "__main__":
 
     spark = (
         SparkSession.builder
-        .appName("OmniRoute_ingest_vehicle_assignment")
+        .appName("OmniRoute_ingest_fuel_transactions")
         .getOrCreate()
     )
 

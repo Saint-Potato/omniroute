@@ -1,15 +1,16 @@
 """
-Bronze Ingestion — Fuel Transactions
-======================================
-Reads fuel_transactions.csv from the S3 landing zone, validates the file,
+Bronze Ingestion — Vehicle Registry
+=====================================
+Reads vehicle_registry.csv from the S3 landing zone, validates the file,
 and writes it as Parquet to the ingested zone.
 
-This is a daily INCREMENTAL load — appends to the partition each run.
+This is a daily FULL SNAPSHOT — appends to the partition each run.
 
 Usage:
-    spark-submit spark_jobs/batch/ingest_fuel_transactions.py --run-date 2026-04-16
+    spark-submit spark_jobs/batch/ingest_vehicle_registry.py --run-date 2026-04-16
 """
 
+import os
 import sys
 import uuid
 import argparse
@@ -17,28 +18,25 @@ from datetime import date
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit, current_timestamp, to_date
-from pyspark.sql.types import (
-    StructType, StructField, StringType, FloatType,
-)
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 
 
 # ──────────────────────────────────────────────
 # Schema definition (must match source CSV exactly)
 # ──────────────────────────────────────────────
 EXPECTED_SCHEMA = StructType([
-    StructField("transaction_id", StringType(), False),
     StructField("vin", StringType(), False),
-    StructField("fuel_liters", FloatType(), True),
-    StructField("odometer_reading", FloatType(), True),
-    StructField("timestamp", StringType(), True),
+    StructField("model", StringType(), True),
+    StructField("mfg_year", IntegerType(), True),
+    StructField("fuel_type", StringType(), True),
 ])
 
-SOURCE_FILENAME = "fuel_transactions.csv"
+SOURCE_FILENAME = "vehicle_registry.csv"
 
-# S3 paths
-LANDING_PATH = "s3a://omniroute-bronze/landing"
-INGESTED_PATH = "s3a://omniroute-bronze/ingested/fuel_transactions"
-QUARANTINE_PATH = "s3a://omniroute-bronze/quarantine"
+# S3 paths — loaded from environment variables
+LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://omniroute-bronze/landing/")
+INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://omniroute-bronze/ingested/") + "vehicle_registry"
+QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://omniroute-bronze/quarantine/")
 
 
 def validate_schema(df, expected_columns):
@@ -57,14 +55,14 @@ def run(spark: SparkSession, run_date: str):
     """
     1. Read CSV from landing/
     2. Validate schema
-    3. Write Parquet to ingested/ (append — incremental load)
+    3. Write Parquet to ingested/ (overwrite partition)
     4. Delete source CSV from landing/
     On validation failure → move file to quarantine/
     """
     source = f"{LANDING_PATH}/{SOURCE_FILENAME}"
     quarantine = f"{QUARANTINE_PATH}/dt={run_date}/{SOURCE_FILENAME}"
 
-    print(f"[fuel_transactions] Reading from: {source}")
+    print(f"[vehicle_registry] Reading from: {source}")
 
     try:
         df = (
@@ -89,13 +87,14 @@ def run(spark: SparkSession, run_date: str):
               .withColumn("source_file_name", lit(SOURCE_FILENAME))
               .withColumn("batch_id", lit(batch_id)))
 
-        # Write (incremental = append), partitioned by load_date
+        # Write (append mode), partitioned by load_date
         df.write.mode("append").partitionBy("load_date").parquet(INGESTED_PATH)
-        print(f"[fuel_transactions] ✓ Wrote {row_count} rows → {INGESTED_PATH}/load_date={run_date}")
+        print(f"[vehicle_registry] ✓ Wrote {row_count} rows → {INGESTED_PATH}/load_date={run_date}")
 
     except Exception as e:
-        print(f"[fuel_transactions] ✗ Validation failed: {e}")
-        print(f"[fuel_transactions] Moving to quarantine: {quarantine}")
+        print(f"[vehicle_registry] ✗ Validation failed: {e}")
+        print(f"[vehicle_registry] Moving to quarantine: {quarantine}")
+        # Read raw file and dump to quarantine as-is
         raw_df = spark.read.option("header", "true").csv(source)
         raw_df.write.mode("overwrite").parquet(quarantine)
         raise
@@ -109,7 +108,7 @@ if __name__ == "__main__":
 
     spark = (
         SparkSession.builder
-        .appName("OmniRoute_ingest_fuel_transactions")
+        .appName("OmniRoute_ingest_vehicle_registry")
         .getOrCreate()
     )
 

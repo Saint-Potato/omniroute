@@ -1,15 +1,16 @@
 """
-Bronze Ingestion — Vehicle Registry
-=====================================
-Reads vehicle_registry.csv from the S3 landing zone, validates the file,
+Bronze Ingestion — Maintenance Schedules
+==========================================
+Reads maintenance_schedules.csv from the S3 landing zone, validates the file,
 and writes it as Parquet to the ingested zone.
 
-This is a daily FULL SNAPSHOT — appends to the partition each run.
+This is a yearly ingestion (Jan 1st) — appends to the partition each run.
 
 Usage:
-    spark-submit spark_jobs/batch/ingest_vehicle_registry.py --run-date 2026-04-16
+    spark-submit spark_jobs/batch/yearly_ingest_maintenance_schedules.py --run-date 2026-01-01
 """
 
+import os
 import sys
 import uuid
 import argparse
@@ -17,7 +18,7 @@ from datetime import date
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import lit, current_timestamp, to_date
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from pyspark.sql.types import StructType, StructField, StringType
 
 
 # ──────────────────────────────────────────────
@@ -25,17 +26,16 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType
 # ──────────────────────────────────────────────
 EXPECTED_SCHEMA = StructType([
     StructField("vin", StringType(), False),
-    StructField("model", StringType(), True),
-    StructField("mfg_year", IntegerType(), True),
-    StructField("fuel_type", StringType(), True),
+    StructField("service_date", StringType(), True),
+    StructField("service_type", StringType(), True),
 ])
 
-SOURCE_FILENAME = "vehicle_registry.csv"
+SOURCE_FILENAME = "maintenance_schedules.csv"
 
-# S3 paths — override via env vars in production
-LANDING_PATH = "s3a://omniroute-bronze/landing"
-INGESTED_PATH = "s3a://omniroute-bronze/ingested/vehicle_registry"
-QUARANTINE_PATH = "s3a://omniroute-bronze/quarantine"
+# S3 paths — loaded from environment variables
+LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://omniroute-bronze/landing/")
+INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://omniroute-bronze/ingested/") + "maintenance_schedules"
+QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://omniroute-bronze/quarantine/")
 
 
 def validate_schema(df, expected_columns):
@@ -54,14 +54,14 @@ def run(spark: SparkSession, run_date: str):
     """
     1. Read CSV from landing/
     2. Validate schema
-    3. Write Parquet to ingested/ (overwrite partition)
+    3. Write Parquet to ingested/ (append)
     4. Delete source CSV from landing/
     On validation failure → move file to quarantine/
     """
     source = f"{LANDING_PATH}/{SOURCE_FILENAME}"
     quarantine = f"{QUARANTINE_PATH}/dt={run_date}/{SOURCE_FILENAME}"
 
-    print(f"[vehicle_registry] Reading from: {source}")
+    print(f"[maintenance_schedules] Reading from: {source}")
 
     try:
         df = (
@@ -88,11 +88,11 @@ def run(spark: SparkSession, run_date: str):
 
         # Write (append mode), partitioned by load_date
         df.write.mode("append").partitionBy("load_date").parquet(INGESTED_PATH)
-        print(f"[vehicle_registry] ✓ Wrote {row_count} rows → {INGESTED_PATH}/load_date={run_date}")
+        print(f"[maintenance_schedules] ✓ Wrote {row_count} rows → {INGESTED_PATH}/load_date={run_date}")
 
     except Exception as e:
-        print(f"[vehicle_registry] ✗ Validation failed: {e}")
-        print(f"[vehicle_registry] Moving to quarantine: {quarantine}")
+        print(f"[maintenance_schedules] ✗ Validation failed: {e}")
+        print(f"[maintenance_schedules] Moving to quarantine: {quarantine}")
         # Read raw file and dump to quarantine as-is
         raw_df = spark.read.option("header", "true").csv(source)
         raw_df.write.mode("overwrite").parquet(quarantine)
@@ -107,7 +107,7 @@ if __name__ == "__main__":
 
     spark = (
         SparkSession.builder
-        .appName("OmniRoute_ingest_vehicle_registry")
+        .appName("OmniRoute_ingest_maintenance_schedules")
         .getOrCreate()
     )
 
