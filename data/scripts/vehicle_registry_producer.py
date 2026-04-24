@@ -17,6 +17,12 @@ from config import (
 )
 
 # ================================
+# BASELINE LOOKUP (FROM CONFIG)
+# ================================
+
+BASELINE_KM_PER_LITER = VEHICLE_REGISTRY_CONFIG["BASELINE_KM_PER_LITER"]
+
+# ================================
 # CONFIGURATION (FROM CONFIG)
 # ================================
 
@@ -51,6 +57,11 @@ def generate_fuel_type():
     return random.choice(FUEL_TYPES)
 
 
+def generate_baseline_kmpl(model):
+    """Return the fleet baseline km/liter for the given model."""
+    return BASELINE_KM_PER_LITER.get(model, 5.0)
+
+
 # ================================
 # MAIN DATA GENERATION
 # ================================
@@ -64,11 +75,14 @@ def generate_vehicle_registry():
         vin = generate_vin(existing_vins)
         existing_vins.add(vin)
 
+        model = generate_model()
+
         record = {
             "vin": vin,
-            "model": generate_model(),
+            "model": model,
             "mfg_year": generate_mfg_year(),
-            "fuel_type": generate_fuel_type()
+            "fuel_type": generate_fuel_type(),
+            "baseline_kmpl": generate_baseline_kmpl(model)
         }
 
         data.append(record)
@@ -104,7 +118,7 @@ def add_edge_cases(data):
 
 def write_to_csv(data):
 
-    fieldnames = ["vin", "model", "mfg_year", "fuel_type"]
+    fieldnames = ["vin", "model", "mfg_year", "fuel_type", "baseline_kmpl"]
 
     with open(OUTPUT_FILE, mode="w", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=fieldnames)
@@ -130,4 +144,4 @@ if __name__ == "__main__":
 
     write_to_csv(data)
 
-    print("Done! Ready for pipeline.")
+    print("Done!")

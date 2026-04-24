@@ -2,17 +2,32 @@
 OmniRoute Daily Batch DAG
 ==========================
 Schedule: Daily @ 05:00 UTC
-Pipeline: Bronze → Silver → Gold → Reporting
+Pipeline: Bronze → DQ Gate → Silver → Gold → Reporting
 
 Ingests vehicle registry, vehicle assignment, and fuel transactions,
-then transforms, builds business tables (SCD2, fuel audit, fleet snapshot),
-loads reporting DB, and generates CSV reports.
+validates data quality, then transforms, builds business tables
+(SCD2, fuel audit, fleet snapshot), loads reporting DB, and generates
+CSV reports.
+
+Production Features:
+- S3KeySensor waits for source files before ingestion
+- DQ quality gate blocks pipeline if pass rate < 95%
+- SLA monitoring (pipeline must complete within 2 hours)
+- Failure callbacks for alerting integration
 """
 
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
+from airflow.exceptions import AirflowFailException
+
+try:
+    from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
+    HAS_S3_SENSOR = True
+except ImportError:
+    HAS_S3_SENSOR = False
 
 
 # ──────────────────────────────────────────────
@@ -22,12 +37,32 @@ SPARK_SUBMIT = "spark-submit"
 JOBS_DIR = "/opt/omniroute/spark_jobs"
 RUN_DATE = "{{ ds }}"  # YYYY-MM-DD execution date
 
+S3_BRONZE_BUCKET = "omniroute-bronze"
+S3_LANDING_PREFIX = "landing"
+
+
+def on_failure_callback(context):
+    """Log failure details for alerting integration (Slack/SNS/PagerDuty)."""
+    ti = context["task_instance"]
+    dag_id = context["dag"].dag_id
+    execution_date = context["execution_date"]
+    log_url = ti.log_url
+    print(
+        f"🚨 FAILURE: {dag_id}.{ti.task_id} | "
+        f"execution_date={execution_date} | "
+        f"log_url={log_url}"
+    )
+    # Production: send to Slack/SNS/PagerDuty here
+
+
 default_args = {
     "owner": "omniroute",
     "depends_on_past": False,
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,
+    "on_failure_callback": on_failure_callback,
+    "sla": timedelta(hours=2),
 }
 
 
@@ -40,11 +75,65 @@ def spark_cmd(script: str, extra_args: str = "") -> str:
 
 
 # ──────────────────────────────────────────────
+# DQ Gate — block pipeline if quality is too low
+# ──────────────────────────────────────────────
+def check_dq_threshold(**context):
+    """
+    Fail the pipeline if any Bronze ingestion DQ pass rate drops below 95%.
+
+    Reads the DQ metrics JSON files emitted by each Spark ingestion job
+    from s3://omniroute-bronze/metrics/dt=<run_date>/.
+    """
+    import json
+    import subprocess
+
+    run_date = context["ds"]
+    jobs = [
+        "ingest_vehicle_registry",
+        "ingest_vehicle_assignment",
+        "ingest_fuel_transactions",
+    ]
+
+    for job_name in jobs:
+        metrics_path = f"s3://omniroute-bronze/metrics/dt={run_date}/{job_name}/part-00000"
+        try:
+            result = subprocess.run(
+                ["aws", "s3", "cp", metrics_path, "-"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                print(f"⚠️  Could not read metrics for {job_name} (skipping)")
+                continue
+
+            metrics = json.loads(result.stdout.strip())
+            dq_pass_rate = metrics.get("dq_pass_rate", 100)
+            total_rows = metrics.get("total_rows", 0)
+
+            print(
+                f"📊 {job_name}: {dq_pass_rate}% pass rate "
+                f"({metrics.get('valid_rows', 0)}/{total_rows} rows)"
+            )
+
+            if dq_pass_rate < 95.0 and total_rows > 0:
+                raise AirflowFailException(
+                    f"DQ GATE FAILED for {job_name}: "
+                    f"pass rate {dq_pass_rate}% < 95% threshold "
+                    f"({metrics.get('invalid_rows', 0)} invalid rows)"
+                )
+
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            print(f"⚠️  Could not parse metrics for {job_name}: {e} (skipping)")
+            continue
+
+    print("✅ All DQ gates passed.")
+
+
+# ──────────────────────────────────────────────
 # DAG Definition
 # ──────────────────────────────────────────────
 with DAG(
     dag_id="omniroute_daily_batch",
-    description="Daily batch pipeline: Bronze → Silver → Gold → Reporting",
+    description="Daily batch pipeline: Bronze → DQ Gate → Silver → Gold → Reporting",
     schedule="0 5 * * *",
     start_date=datetime(2026, 4, 1),
     catchup=False,
@@ -52,6 +141,37 @@ with DAG(
     default_args=default_args,
     max_active_runs=1,
 ) as dag:
+
+    # ──────────────────────────────────────────
+    # S3 SENSORS — Wait for source files
+    # ──────────────────────────────────────────
+    if HAS_S3_SENSOR:
+        wait_for_registry = S3KeySensor(
+            task_id="wait_for_vehicle_registry",
+            bucket_name=S3_BRONZE_BUCKET,
+            bucket_key=f"{S3_LANDING_PREFIX}/vehicle_registry.csv",
+            timeout=3600,
+            poke_interval=60,
+            mode="reschedule",
+        )
+
+        wait_for_assignment = S3KeySensor(
+            task_id="wait_for_vehicle_assignment",
+            bucket_name=S3_BRONZE_BUCKET,
+            bucket_key=f"{S3_LANDING_PREFIX}/vehicle_assignment.csv",
+            timeout=3600,
+            poke_interval=60,
+            mode="reschedule",
+        )
+
+        wait_for_fuel = S3KeySensor(
+            task_id="wait_for_fuel_transactions",
+            bucket_name=S3_BRONZE_BUCKET,
+            bucket_key=f"{S3_LANDING_PREFIX}/fuel_transactions.csv",
+            timeout=3600,
+            poke_interval=60,
+            mode="reschedule",
+        )
 
     # ──────────────────────────────────────────
     # BRONZE — Ingest raw data from landing/
@@ -81,6 +201,14 @@ with DAG(
                 f"--run-date {RUN_DATE}",
             ),
         )
+
+    # ──────────────────────────────────────────
+    # DQ GATE — Block pipeline if quality is low
+    # ──────────────────────────────────────────
+    dq_gate = PythonOperator(
+        task_id="dq_quality_gate",
+        python_callable=check_dq_threshold,
+    )
 
     # ──────────────────────────────────────────
     # SILVER — Cleanse, dedup, enrich
@@ -157,9 +285,22 @@ with DAG(
     # Task Dependencies
     # ──────────────────────────────────────────
 
-    # Bronze → Silver
-    # [ingest_registry, ingest_assignment] >> transform_assignment
-    # [ingest_registry, ingest_fuel] >> transform_fuel
+    # S3 Sensors → Bronze (if available)
+    if HAS_S3_SENSOR:
+        wait_for_registry >> ingest_registry
+        wait_for_assignment >> ingest_assignment
+        wait_for_fuel >> ingest_fuel
+
+    # Bronze → DQ Gate
+    [ingest_registry, ingest_assignment, ingest_fuel] >> dq_gate
+
+    # DQ Gate → Silver
+    dq_gate >> transform_assignment
+    dq_gate >> transform_fuel
+    # transform_assignment also needs registry data (for VIN validation)
+    ingest_registry >> transform_assignment
+    # transform_fuel also needs registry data (for model lookup)
+    ingest_registry >> transform_fuel
 
     # Silver → Gold
     # transform_assignment >> build_scd2

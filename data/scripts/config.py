@@ -29,24 +29,24 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(TELEMETRY_RAW_DIR, exist_ok=True)
 
 # ================================
-# FILE PATHS (CURRENT)
+# RAW FILE PATHS
 # ================================
-
-VEHICLE_REGISTRY_FILE = os.path.join(DATA_DIR, "raw/vehicle_registry.csv")
-VEHICLE_ASSIGNMENT_FILE = os.path.join(DATA_DIR, "raw/vehicle_assignment.csv")
-MAINTENANCE_FILE = os.path.join(DATA_DIR, "raw/maintenance_schedules.csv")
-FUEL_FILE = os.path.join(DATA_DIR, "raw/fuel_transactions.csv")
-RESTRICTED_ZONES_FILE = os.path.join(DATA_DIR, "raw/restricted_zones.json")
-
-# ================================
-# RAW FILE PATHS (FUTURE SAFE)
-# ================================
+# Note: These are the canonical paths for raw data files.
+# Both _FILE and _RAW_FILE aliases exist for backward compatibility
+# with producers (which write) and consumers (which read).
 
 VEHICLE_REGISTRY_RAW_FILE = os.path.join(RAW_DIR, "vehicle_registry.csv")
 VEHICLE_ASSIGNMENT_RAW_FILE = os.path.join(RAW_DIR, "vehicle_assignment.csv")
 MAINTENANCE_RAW_FILE = os.path.join(RAW_DIR, "maintenance_schedules.csv")
 FUEL_RAW_FILE = os.path.join(RAW_DIR, "fuel_transactions.csv")
 RESTRICTED_ZONES_RAW_FILE = os.path.join(RAW_DIR, "restricted_zones.json")
+
+# Aliases (used by consumers, telemetry producer, and downstream scripts)
+VEHICLE_REGISTRY_FILE = VEHICLE_REGISTRY_RAW_FILE
+VEHICLE_ASSIGNMENT_FILE = VEHICLE_ASSIGNMENT_RAW_FILE
+MAINTENANCE_FILE = MAINTENANCE_RAW_FILE
+FUEL_FILE = FUEL_RAW_FILE
+RESTRICTED_ZONES_FILE = RESTRICTED_ZONES_RAW_FILE
 
 # ================================
 # SCRIPT PATHS
@@ -74,7 +74,14 @@ VEHICLE_REGISTRY_CONFIG = {
         "Tata Ultra",
         "Ashok Leyland Dost"
     ],
-    "FUEL_TYPES": ["Diesel", "LNG", "CNG", "Electric"]
+    "FUEL_TYPES": ["Diesel", "LNG", "CNG", "Electric"],
+    "BASELINE_KM_PER_LITER": {
+        "Freightliner M2": 5.0,
+        "Volvo VNL": 4.5,
+        "Isuzu N-Series": 6.0,
+        "Tata Ultra": 5.5,
+        "Ashok Leyland Dost": 8.0
+    }
 }
 
 # ================================

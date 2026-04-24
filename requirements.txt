@@ -11,3 +11,4 @@ pyarrow
 psycopg2-binary==2.9.9
 boto3
 apache-airflow-providers-amazon
+

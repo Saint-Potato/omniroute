@@ -9,7 +9,7 @@ import json
 import time
 import random
 import csv
-from datetime import datetime
+from datetime import datetime, timedelta
 from kafka import KafkaProducer
 
 from config import (

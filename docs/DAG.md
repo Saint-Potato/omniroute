@@ -19,17 +19,35 @@ DAGs are organized by **schedule frequency**, with **TaskGroups** inside each DA
 Schedule: 0 5 * * * (daily @ 05:00 UTC)
 Catchup:  False
 Tags:     [batch, daily, core]
+SLA:      2 hours (pipeline must complete within this window)
 ```
+
+### Production Features
+
+| Feature | Implementation | Purpose |
+|---|---|---|
+| **S3KeySensor** | Waits for each CSV in `landing/` before ingestion | Prevents ingestion of missing files |
+| **DQ Quality Gate** | Reads DQ metrics JSON, blocks if pass rate < 95% | Prevents bad data from reaching Silver |
+| **SLA Monitoring** | `sla=timedelta(hours=2)` in `default_args` | Alerts if pipeline runs too long |
+| **Failure Callbacks** | `on_failure_callback` logs dag_id, task_id, log_url | Integration point for Slack/SNS/PagerDuty |
 
 ### Task Dependency Chain
 
 ```mermaid
 flowchart LR
+    subgraph sensors["S3 Sensors"]
+        S1["wait_for_registry"]
+        S2["wait_for_assignment"]
+        S3["wait_for_fuel"]
+    end
+
     subgraph bronze["TaskGroup: bronze"]
         BI1[ingest_registry]
         BI2[ingest_assignment]
         BI3[ingest_fuel]
     end
+
+    DQ["dq_quality_gate"]
 
     subgraph silver["TaskGroup: silver"]
         TS1[transform_assignment]
@@ -47,10 +65,18 @@ flowchart LR
         R2[generate_reports]
     end
 
+    S1 --> BI1
+    S2 --> BI2
+    S3 --> BI3
+
+    BI1 --> DQ
+    BI2 --> DQ
+    BI3 --> DQ
+
+    DQ --> TS1
+    DQ --> TS2
     BI1 --> TS1
-    BI2 --> TS1
     BI1 --> TS2
-    BI3 --> TS2
 
     TS1 --> G1
     G1 --> G2
@@ -64,11 +90,15 @@ flowchart LR
 
 ### Task Details
 
-| TaskGroup | Task | Spark Job | Description |
+| TaskGroup | Task | Type / Spark Job | Description |
 |---|---|---|---|
+| sensors | `wait_for_vehicle_registry` | S3KeySensor | Waits for `landing/vehicle_registry.csv` (1hr timeout, reschedule mode) |
+| sensors | `wait_for_vehicle_assignment` | S3KeySensor | Waits for `landing/vehicle_assignment.csv` (1hr timeout, reschedule mode) |
+| sensors | `wait_for_fuel_transactions` | S3KeySensor | Waits for `landing/fuel_transactions.csv` (1hr timeout, reschedule mode) |
 | bronze | `ingest_vehicle_registry` | `batch/ingest_vehicle_registry.py` | Full snapshot CSV → Parquet (overwrite) |
 | bronze | `ingest_vehicle_assignment` | `batch/ingest_vehicle_assignment.py` | Incremental CSV → Parquet (append) |
 | bronze | `ingest_fuel_transactions` | `batch/ingest_fuel_transactions.py` | Daily fuel CSV → Parquet (append) |
+| — | `dq_quality_gate` | PythonOperator | Reads DQ metrics JSON from S3, fails pipeline if any job pass rate < 95% |
 | silver | `transform_vehicle_assignment` | `batch/transform_vehicle_assignment.py` | Unix→date, dedup by highest rate |
 | silver | `transform_fuel_transactions` | `batch/transform_fuel_transactions.py` | Weekend/maintenance filter, compute km/liter |
 | gold | `build_asset_history_scd2` | `batch/build_asset_history_scd2.py` | SCD Type 2 merge |

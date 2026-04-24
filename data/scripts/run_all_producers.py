@@ -56,6 +56,14 @@ def run_script(script_path, name):
 
 def main():
 
+    import argparse
+    parser = argparse.ArgumentParser(description="OmniRoute Batch Data Generator")
+    parser.add_argument(
+        "--stream", action="store_true",
+        help="Also start the Kafka telemetry producer after batch generation"
+    )
+    args = parser.parse_args()
+
     print("\nSTARTING FULL DATA PIPELINE\n")
 
     scripts = [
@@ -71,9 +79,7 @@ def main():
 
     print("\nALL BATCH DATA GENERATED SUCCESSFULLY")
 
-    start_stream = input("\nDo you want to start telemetry streaming? (y/n): ").strip().lower()
-
-    if start_stream == "y":
+    if args.stream:
         print("\nStarting Real-Time Telemetry (Press CTRL+C to stop)\n")
 
         telemetry_script = os.path.join(STREAMING_SCRIPTS, "telemetry_producer.py")
@@ -85,7 +91,7 @@ def main():
         subprocess.run([PYTHON_EXEC, telemetry_script])
 
     else:
-        print("\nSkipping telemetry streaming")
+        print("\nSkipping telemetry streaming (use --stream to enable)")
 
 
 # ================================

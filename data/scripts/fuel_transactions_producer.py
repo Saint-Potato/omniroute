@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from config import (
     VEHICLE_REGISTRY_FILE,
+    VEHICLE_REGISTRY_CONFIG,
     FUEL_RAW_FILE,
     FUEL_CONFIG,
     DATA_DIR
@@ -63,13 +64,8 @@ def generate_data(vin_model_map):
     vins = list(vin_model_map.keys())
     odometer_map = {vin: random.randint(10000, 50000) for vin in vins}
 
-    BASELINE_KM_PER_LITER = {
-        "Freightliner M2": 5.0,
-        "Volvo VNL": 4.5,
-        "Isuzu N-Series": 6.0,
-        "Tata Ultra": 5.5,
-        "Ashok Leyland Dost": 8.0
-    }
+    # Use centralized baseline from config (single source of truth)
+    BASELINE_KM_PER_LITER = VEHICLE_REGISTRY_CONFIG["BASELINE_KM_PER_LITER"]
 
     for _ in range(NUM_RECORDS):
 
@@ -80,7 +76,7 @@ def generate_data(vin_model_map):
         distance = random.randint(MIN_DISTANCE, MAX_DISTANCE)
         odometer_map[vin] += distance
 
-        if random.random() < 0.05:
+        if random.random() < 0.10:
             efficiency = baseline * 0.85
         else:
             efficiency = baseline * random.uniform(0.95, 1.05)
