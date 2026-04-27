@@ -33,9 +33,9 @@ EXPECTED_SCHEMA = StructType([
 SOURCE_FILENAME = "maintenance_schedules.csv"
 
 # S3 paths — loaded from environment variables
-LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://omniroute-bronze/landing/")
-INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://omniroute-bronze/ingested/") + "maintenance_schedules"
-QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://omniroute-bronze/quarantine/")
+LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/landing/")
+INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/ingested/") + "maintenance_schedules"
+QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine/")
 
 
 def validate_schema(df, expected_columns):

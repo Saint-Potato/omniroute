@@ -50,10 +50,10 @@ EXPECTED_SCHEMA = StructType([
 
 SOURCE_FILENAME = "maintenance_schedules.csv"
 
-LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://omniroute-bronze/landing")
-INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://omniroute-bronze/ingested/") + "maintenance_schedules"
-QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://omniroute-bronze/quarantine")
-METRICS_PATH = os.environ.get("METRICS_PATH", "s3a://omniroute-bronze/metrics")
+LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/landing")
+INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/ingested/") + "maintenance_schedules"
+QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine")
+METRICS_PATH = os.environ.get("METRICS_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/metrics")
 
 VALID_SERVICE_TYPES = {
     "Engine Overhaul", "Tire Rotation", "Oil Change",

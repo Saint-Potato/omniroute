@@ -37,7 +37,7 @@ SPARK_SUBMIT = "spark-submit"
 JOBS_DIR = "/opt/omniroute/spark_jobs"
 RUN_DATE = "{{ ds }}"  # YYYY-MM-DD execution date
 
-S3_BRONZE_BUCKET = "omniroute-bronze"
+S3_BRONZE_BUCKET = "ttn-de-bootcamp-bronze-us-east-1"
 S3_LANDING_PREFIX = "landing"
 
 
@@ -82,7 +82,7 @@ def check_dq_threshold(**context):
     Fail the pipeline if any Bronze ingestion DQ pass rate drops below 95%.
 
     Reads the DQ metrics JSON files emitted by each Spark ingestion job
-    from s3://omniroute-bronze/metrics/dt=<run_date>/.
+    from s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/metrics/dt=<run_date>/.
     """
     import json
     import subprocess
@@ -95,7 +95,7 @@ def check_dq_threshold(**context):
     ]
 
     for job_name in jobs:
-        metrics_path = f"s3://omniroute-bronze/metrics/dt={run_date}/{job_name}/part-00000"
+        metrics_path = f"s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/metrics/dt={run_date}/{job_name}/part-00000"
         try:
             result = subprocess.run(
                 ["aws", "s3", "cp", metrics_path, "-"],

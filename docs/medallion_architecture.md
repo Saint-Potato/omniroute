@@ -21,7 +21,7 @@
                                   ▼                        ▼
                     ┌─────────────────────────────────────────────────────┐
                     │               🥉 BRONZE LAYER                      │
-                    │         s3://omniroute-bronze/                      │
+                    │         s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/                      │
                     │                                                     │
                     │  landing/    → raw CSVs dropped by upstream         │
                     │  ingested/   → validated & converted to Parquet     │
@@ -35,7 +35,7 @@
                                                ▼
                     ┌─────────────────────────────────────────────────────┐
                     │              🥈 SILVER LAYER (Cleansed)            │
-                    │         s3://omniroute-data-lake/silver/            │
+                    │         s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/            │
                     │                                                     │
                     │  Deduplication, type casting, timestamp conversion  │
                     │  Weekend/maintenance filtering for fuel data        │
@@ -46,7 +46,7 @@
                                                ▼
                     ┌─────────────────────────────────────────────────────┐
                     │               🥇 GOLD LAYER (Business)            │
-                    │         s3://omniroute-data-lake/gold/              │
+                    │         s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/              │
                     │                                                     │
                     │  SCD Type 2 asset history                          │
                     │  Fuel efficiency audit (flagged / OK)              │
@@ -157,7 +157,7 @@ flowchart TD
 
 ## 🥉 Bronze Layer
 
-**Bucket:** `s3://omniroute-bronze/`  
+**Bucket:** `s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/`  
 **Format:** CSV (landing) → Parquet (ingested)  
 **Principle:** Validate and convert source data. No business logic, no dedup, no schema changes.
 
@@ -306,7 +306,7 @@ During ingestion, every record is enriched with the following metadata columns b
 
 ## 🥈 Silver Layer (Cleansed & Conformed)
 
-**Path:** `s3://omniroute-data-lake/silver/<table_name>/`  
+**Path:** `s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/<table_name>/`  
 **Format:** Parquet  
 **Principle:** Data quality applied — dedup, type casting, derived columns, filtering.
 
@@ -408,7 +408,7 @@ During ingestion, every record is enriched with the following metadata columns b
 
 ## 🥇 Gold Layer (Business-Ready)
 
-**Path:** `s3://omniroute-data-lake/gold/<table_name>/`  
+**Path:** `s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/<table_name>/`  
 **Format:** Parquet (Delta Lake recommended for SCD2 merge)  
 **Principle:** Business logic applied — SCD Type 2, audits, aggregations, penalty calculations.
 
@@ -690,7 +690,7 @@ flowchart LR
 ## Storage Layout on S3
 
 ```
-s3://omniroute-bronze/                          # 🥉 Bronze
+s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/                          # 🥉 Bronze
 ├── landing/                                    # Raw CSVs dropped here
 │   ├── vehicle_registry.csv
 │   ├── vehicle_assignment.csv
@@ -709,7 +709,7 @@ s3://omniroute-bronze/                          # 🥉 Bronze
     └── dt=2026-04-15/
         └── unknown_file.xlsx
 
-s3://omniroute-data-lake/
+s3://ttn-de-bootcamp-silver-us-east-1/
 ├── silver/                                     # 🥈 Silver
 │   ├── vehicle_registry_clean/
 │   ├── vehicle_assignment_clean/

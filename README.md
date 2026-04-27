@@ -163,10 +163,10 @@ spark-submit data/scripts/consumer_scripts/spark_streaming_consumer.py
 
 | Variable | Default | Description |
 |---|---|---|
-| `LANDING_PATH` | `s3a://omniroute-bronze/landing` | S3 path for raw CSV uploads |
-| `INGESTED_PATH` | `s3a://omniroute-bronze/ingested/` | S3 path for validated Parquet |
-| `QUARANTINE_PATH` | `s3a://omniroute-bronze/quarantine` | S3 path for rejected files |
-| `METRICS_PATH` | `s3a://omniroute-bronze/metrics` | S3 path for DQ metrics JSON |
+| `LANDING_PATH` | `s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/landing` | S3 path for raw CSV uploads |
+| `INGESTED_PATH` | `s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/ingested/` | S3 path for validated Parquet |
+| `QUARANTINE_PATH` | `s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine` | S3 path for rejected files |
+| `METRICS_PATH` | `s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/metrics` | S3 path for DQ metrics JSON |
 | `KAFKA_SERVER` | `localhost:9092` | Kafka bootstrap server |
 | `PG_HOST` | `localhost` | PostgreSQL host |
 | `PG_PORT` | `5432` | PostgreSQL port |

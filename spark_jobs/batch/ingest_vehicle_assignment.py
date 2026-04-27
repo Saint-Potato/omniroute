@@ -43,10 +43,10 @@ EXPECTED_SCHEMA = StructType([
 ])
 
 SOURCE_FILENAME = "vehicle_assignment.csv"
-LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://omniroute-bronze/landing")
-INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://omniroute-bronze/ingested/") + "vehicle_assignment"
-QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://omniroute-bronze/quarantine")
-METRICS_PATH = os.environ.get("METRICS_PATH", "s3a://omniroute-bronze/metrics")
+LANDING_PATH = os.environ.get("LANDING_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/landing")
+INGESTED_PATH = os.environ.get("INGESTED_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/ingested/") + "vehicle_assignment"
+QUARANTINE_PATH = os.environ.get("QUARANTINE_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine")
+METRICS_PATH = os.environ.get("METRICS_PATH", "s3a://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/metrics")
 
 
 def run(spark: SparkSession, run_date: str):
