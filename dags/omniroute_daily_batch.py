@@ -34,7 +34,16 @@ except ImportError:
 # DAG Configuration
 # ──────────────────────────────────────────────
 SPARK_SUBMIT = "spark-submit"
-JOBS_DIR = "/opt/omniroute/spark_jobs"
+
+# Delta Lake package — required for all Silver layer writes.
+# This is passed to every spark-submit command that touches Delta tables.
+DELTA_PACKAGE = "io.delta:delta-spark_2.12:3.3.0"
+
+JOBS_DIR = "/opt/omniroute/spark_jobs"  # Deploy target: sudo cp -r spark_jobs/* /opt/omniroute/spark_jobs/
+
+# Airflow Jinja template: {{ ds }} resolves to the DAG's logical execution date
+# e.g., for a run triggered on 2026-04-24 at 05:00, ds = "2026-04-24"
+# This ensures all Spark jobs process data for the SAME date consistently
 RUN_DATE = "{{ ds }}"  # YYYY-MM-DD execution date
 
 S3_BRONZE_BUCKET = "ttn-de-bootcamp-bronze-us-east-1"
@@ -67,11 +76,24 @@ default_args = {
 
 
 # ──────────────────────────────────────────────
-# Helper — build spark-submit command
+# Helpers — build spark-submit commands
 # ──────────────────────────────────────────────
 def spark_cmd(script: str, extra_args: str = "") -> str:
-    """Build a spark-submit command string."""
+    """Build a spark-submit command for Bronze layer (plain Parquet, no Delta)."""
     return f"{SPARK_SUBMIT} {JOBS_DIR}/{script} {extra_args}".strip()
+
+
+def spark_delta_cmd(script: str, extra_args: str = "") -> str:
+    """Build a spark-submit command for Silver/Gold layer (requires Delta Lake package).
+    
+    The --packages flag tells Spark to download the Delta Lake JAR from Maven
+    at runtime. This is required for .format("delta") reads and writes.
+    """
+    return (
+        f"{SPARK_SUBMIT} "
+        f"--packages {DELTA_PACKAGE} "
+        f"{JOBS_DIR}/{script} {extra_args}"
+    ).strip()
 
 
 # ──────────────────────────────────────────────
@@ -136,10 +158,10 @@ with DAG(
     description="Daily batch pipeline: Bronze → DQ Gate → Silver → Gold → Reporting",
     schedule="0 5 * * *",
     start_date=datetime(2026, 4, 1),
-    catchup=False,
+    catchup=False,                # Don't run for past dates when DAG is first deployed
     tags=["batch", "daily", "core"],
     default_args=default_args,
-    max_active_runs=1,
+    max_active_runs=1,            # Only one DAG run at a time (prevents resource contention)
 ) as dag:
 
     # ──────────────────────────────────────────
@@ -175,13 +197,15 @@ with DAG(
 
     # ──────────────────────────────────────────
     # BRONZE — Ingest raw data from landing/
+    # These 3 tasks run IN PARALLEL (no dependencies between them).
+    # Each reads a CSV from S3 landing, validates schema, writes Parquet.
     # ──────────────────────────────────────────
     with TaskGroup("bronze") as bronze:
 
         ingest_registry = BashOperator(
             task_id="ingest_vehicle_registry",
             bash_command=spark_cmd(
-                "batch/ingest_vehicle_registry.py",
+                "batch/daily_ingest_vehicle_registry.py",
                 f"--run-date {RUN_DATE}",
             ),
         )
@@ -189,7 +213,7 @@ with DAG(
         ingest_assignment = BashOperator(
             task_id="ingest_vehicle_assignment",
             bash_command=spark_cmd(
-                "batch/ingest_vehicle_assignment.py",
+                "batch/daily_ingest_vehicle_assignment.py",
                 f"--run-date {RUN_DATE}",
             ),
         )
@@ -197,7 +221,7 @@ with DAG(
         ingest_fuel = BashOperator(
             task_id="ingest_fuel_transactions",
             bash_command=spark_cmd(
-                "batch/ingest_fuel_transactions.py",
+                "batch/daily_ingest_fuel_transactions.py",
                 f"--run-date {RUN_DATE}",
             ),
         )
@@ -238,7 +262,7 @@ with DAG(
 
     #     build_scd2 = BashOperator(
     #         task_id="build_asset_history_scd2",
-    #         bash_command=spark_cmd(
+    #         bash_command=spark_delta_cmd(
     #             "batch/build_asset_history_scd2.py",
     #             f"--run-date {RUN_DATE}",
     #         ),
@@ -246,7 +270,7 @@ with DAG(
 
     #     build_fuel_audit = BashOperator(
     #         task_id="build_fuel_efficiency_audit",
-    #         bash_command=spark_cmd(
+    #         bash_command=spark_delta_cmd(
     #             "batch/build_fuel_efficiency_audit.py",
     #             f"--run-date {RUN_DATE}",
     #         ),
@@ -254,7 +278,7 @@ with DAG(
 
     #     build_fleet_snapshot = BashOperator(
     #         task_id="build_active_fleet_snapshot",
-    #         bash_command=spark_cmd(
+    #         bash_command=spark_delta_cmd(
     #             "batch/build_active_fleet_snapshot.py",
     #             f"--run-date {RUN_DATE}",
     #         ),
@@ -267,7 +291,7 @@ with DAG(
 
     #     load_postgres = BashOperator(
     #         task_id="load_reporting_db",
-    #         bash_command=spark_cmd(
+    #         bash_command=spark_delta_cmd(
     #             "batch/load_reporting_db.py",
     #             f"--run-date {RUN_DATE}",
     #         ),
@@ -275,7 +299,7 @@ with DAG(
 
     #     generate_reports = BashOperator(
     #         task_id="generate_reports",
-    #         bash_command=spark_cmd(
+    #         bash_command=spark_delta_cmd(
     #             "batch/generate_reports.py",
     #             f"--run-date {RUN_DATE}",
     #         ),
