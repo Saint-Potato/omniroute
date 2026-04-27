@@ -1,0 +1,18 @@
+{
+    "bronze": {
+        "base_bucket": "s3://ttn-de-bootcamp-bronze-us-east-1/8854-aryan-thapliyal/",
+        "landing": "s3://ttn-de-bootcamp-bronze-us-east-1/8854-aryan-thapliyal/landing/",
+        "ingested": "s3://ttn-de-bootcamp-bronze-us-east-1/8854-aryan-thapliyal/ingested/",
+        "quarantine": "s3://ttn-de-bootcamp-bronze-us-east-1/8854-aryan-thapliyal/quarantine/"
+    },
+    "silver": {
+        "base_bucket": "s3://ttn-de-bootcamp-silver-us-east-1/8854_aryan_thapliyal/",
+        "tables": {
+            "fuel_transactions": "s3://ttn-de-bootcamp-silver-us-east-1/8854_aryan_thapliyal/silver.fuel_transactions/",
+            "maintenance_schedules": "s3://ttn-de-bootcamp-silver-us-east-1/8854_aryan_thapliyal/silver.maintenance_schedules/",
+            "telemetry": "s3://ttn-de-bootcamp-silver-us-east-1/8854_aryan_thapliyal/silver.telemetry/",
+            "vehicle_assignment": "s3://ttn-de-bootcamp-silver-us-east-1/8854_aryan_thapliyal/silver.vehicle_assignment/",
+            "vehicle_registry": "s3://ttn-de-bootcamp-silver-us-east-1/8854_aryan_thapliyal/silver.vehicle_registry/"
+        }
+    }
+}
