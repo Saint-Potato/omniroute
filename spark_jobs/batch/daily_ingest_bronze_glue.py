@@ -229,7 +229,7 @@ def process_datasets(spark, run_date, landing_path, ingested_path, quarantine_pa
             # ── Write Parquet, partitioned by load_date ──
             # mode="append" allows multiple runs for different dates
             # to co-exist in the same dataset folder
-            df.write.mode("append").partitionBy("load_date").parquet(dest)
+            df.write.mode("overwrite").partitionBy("load_date").parquet(dest)
             print(f"[{dataset_name}] ✓ Wrote {row_count} rows → {dest}/load_date={run_date}")
             
             # ── Move source file to archive ──

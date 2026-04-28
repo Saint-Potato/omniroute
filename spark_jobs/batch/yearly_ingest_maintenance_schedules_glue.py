@@ -120,7 +120,7 @@ def process_maintenance_schedules(spark, run_date, landing_path, ingested_path, 
               .withColumn("source_file_name", lit(SOURCE_FILENAME))
               .withColumn("batch_id", lit(batch_id)))
 
-        df.write.mode("append").partitionBy("load_date").parquet(dest)
+        df.write.mode("overwrite").partitionBy("load_date").parquet(dest)
         print(f"[{dataset_name}] ✓ Wrote {row_count} rows → {dest}/load_date={run_date}")
         
         # Move successfully processed file to archive
