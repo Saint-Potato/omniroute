@@ -72,7 +72,7 @@ SCHEMAS = {
         StructField("model", StringType(), True),             # vehicle model name
         StructField("mfg_year", IntegerType(), True),         # year of manufacture
         StructField("fuel_type", StringType(), True),
-        StructField("baseline_kmph",FloatType(),True) ,        # DIESEL / PETROL / CNG
+        StructField("baseline_kmpl",FloatType(),True) ,        # DIESEL / PETROL / CNG
     ]),
 
     # vehicle_assignment.csv — driver ↔ vehicle assignments
