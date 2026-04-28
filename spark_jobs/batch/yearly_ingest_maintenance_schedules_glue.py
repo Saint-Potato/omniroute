@@ -24,7 +24,7 @@ from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
-from pyspark.sql.functions import lit, current_timestamp, to_date
+from pyspark.sql.functions import lit, current_timestamp, to_date, col
 from pyspark.sql.types import StructType, StructField, StringType
 
 # ──────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ from pyspark.sql.types import StructType, StructField, StringType
 # ──────────────────────────────────────────────────────────────
 # Must match source CSV exactly
 EXPECTED_SCHEMA = StructType([
-    StructField("vin", StringType(), False),
+    StructField("vin", StringType(), True), # PK - accepts null
     StructField("service_date", StringType(), True),
     StructField("service_type", StringType(), True),
 ])
@@ -100,11 +100,14 @@ def process_maintenance_schedules(spark, run_date, landing_path, ingested_path, 
         df = (
             spark.read
             .option("header", "true")
-            .schema(EXPECTED_SCHEMA)
             .csv(source)
         )
 
         validate_schema(df, [f.name for f in EXPECTED_SCHEMA.fields])
+
+        cast_cols = [col(f.name).cast(f.dataType).alias(f.name) for f in EXPECTED_SCHEMA.fields]
+        df = df.select(*cast_cols)
+
         row_count = df.count()
 
         if row_count == 0:
@@ -124,20 +127,12 @@ def process_maintenance_schedules(spark, run_date, landing_path, ingested_path, 
         move_s3_object(source, archive_dest)
 
     except Exception as e:
-        print(f"[{dataset_name}] ✗ Validation failed: {e}")
-        print(f"[{dataset_name}] Moving to quarantine: {quarantine}")
+        print(f"[{dataset_name}] ✗ Validation/Ingestion failed: {e}")
+        print(f"[{dataset_name}] Moving raw CSV directly to archive: {archive_dest}")
         try:
-            raw_df = spark.read.option("header", "true").csv(source)
-            raw_df.write.mode("overwrite").parquet(quarantine)
-            # After moving to quarantine, can also delete the source if we don't want it laying around
-            # But the user specifically asked for "remove the csv file from landing to archive folder ... after SUCCESSFUL conversion".
-            # For quarantine, write.parquet makes a copy. We should delete the original to keep landing clean.
-            s3 = boto3.client('s3')
-            src_parsed = urlparse(source)
-            s3.delete_object(Bucket=src_parsed.netloc, Key=src_parsed.path.lstrip('/'))
-            print("    Raw file converted to parquet in quarantine, original deleted from landing.")
-        except Exception as read_err:
-            print(f"[{dataset_name}] Error while quarantining: {read_err}")
+            move_s3_object(source, archive_dest)
+        except Exception as move_err:
+            print(f"[{dataset_name}] Error while archiving failed file: {move_err}")
         raise
 
 

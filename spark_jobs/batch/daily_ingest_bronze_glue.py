@@ -46,11 +46,10 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 
 # Standard PySpark imports for transformations and schema definitions.
-from pyspark.sql.functions import lit, current_timestamp, to_date
+from pyspark.sql.functions import lit, current_timestamp, to_date, col
 from pyspark.sql.types import (
     StructType, StructField, StringType, FloatType, LongType, IntegerType,
 )
-
 
 # ──────────────────────────────────────────────────────────────
 # Schema Definitions
@@ -60,8 +59,8 @@ from pyspark.sql.types import (
 SCHEMAS = {
     # fuel_transactions.csv — one row per fueling event
     "fuel_transactions.csv": StructType([
-        StructField("transaction_id", StringType(), False),   # PK – unique txn ID
-        StructField("vin", StringType(), False),              # FK – vehicle VIN
+        StructField("transaction_id", StringType(), True),    # PK – unique txn ID (accepts null)
+        StructField("vin", StringType(), True),               # FK – vehicle VIN (accepts null)
         StructField("fuel_liters", FloatType(), True),        # liters dispensed
         StructField("odometer_reading", FloatType(), True),   # odometer at fill-up
         StructField("timestamp", StringType(), True),         # ISO-8601 timestamp
@@ -69,16 +68,17 @@ SCHEMAS = {
 
     # vehicle_registry.csv — master list of vehicles
     "vehicle_registry.csv": StructType([
-        StructField("vin", StringType(), False),              # PK – vehicle VIN
+        StructField("vin", StringType(), True),               # PK – vehicle VIN (accepts null)
         StructField("model", StringType(), True),             # vehicle model name
         StructField("mfg_year", IntegerType(), True),         # year of manufacture
-        StructField("fuel_type", StringType(), True),         # DIESEL / PETROL / CNG
+        StructField("fuel_type", StringType(), True),
+        StructField("baseline_kmph",FloatType(),True) ,        # DIESEL / PETROL / CNG
     ]),
 
     # vehicle_assignment.csv — driver ↔ vehicle assignments
     "vehicle_assignment.csv": StructType([
-        StructField("vin", StringType(), False),              # FK – vehicle VIN
-        StructField("driver_id", StringType(), False),        # FK – driver ID
+        StructField("vin", StringType(), True),               # FK – vehicle VIN (accepts null)
+        StructField("driver_id", StringType(), True),         # FK – driver ID (accepts null)
         StructField("start_timestamp", LongType(), True),     # epoch start
         StructField("end_timestamp", LongType(), True),       # epoch end
         StructField("daily_rate", FloatType(), True),         # INR per day
@@ -183,6 +183,7 @@ def process_datasets(spark, run_date, landing_path, ingested_path, quarantine_pa
         # Build the quarantine path for failed files
         # Quarantine is partitioned by date and preserves the source filename
         quarantine = f"{quarantine_path}dt={run_date}/{source_filename}"
+        archive_dest = f"{archive_path}dt={run_date}/{source_filename}"
 
         print(f"[{dataset_name}] Reading from: {source}")
 
@@ -190,18 +191,21 @@ def process_datasets(spark, run_date, landing_path, ingested_path, quarantine_pa
         expected_schema = SCHEMAS[source_filename]
 
         try:
-            # ── Read CSV with enforced schema ──
-            # header=true: first row is column names
-            # schema: enforces data types (nulls on cast failure)
+            # ── Read raw CSV with headers ──
+            # No explicit schema applied here so we can read the actual CSV columns, 
+            # allowing different column order.
             df = (
                 spark.read
                 .option("header", "true")
-                .schema(expected_schema)
                 .csv(source)
             )
 
-            # ── Validate column names match expected schema ──
+            # ── Validate column names match expected schema (regardless of order) ──
             validate_schema(df, [f.name for f in expected_schema.fields])
+
+            # ── Select and cast columns in exact expected order ──
+            cast_cols = [col(f.name).cast(f.dataType).alias(f.name) for f in expected_schema.fields]
+            df = df.select(*cast_cols)
 
             # ── Check for empty files ──
             row_count = df.count()
@@ -229,19 +233,16 @@ def process_datasets(spark, run_date, landing_path, ingested_path, quarantine_pa
             print(f"[{dataset_name}] ✓ Wrote {row_count} rows → {dest}/load_date={run_date}")
             
             # ── Move source file to archive ──
-            archive_dest = f"{archive_path}dt={run_date}/{source_filename}"
             move_s3_object(source, archive_dest)
 
         except Exception as e:
-            # ── Validation or read failed — quarantine the raw file ──
-            print(f"[{dataset_name}] ✗ Validation failed: {e}")
-            print(f"[{dataset_name}] Moving raw data to quarantine: {quarantine}")
+            # ── Validation or read failed — archive the raw file ──
+            print(f"[{dataset_name}] ✗ Validation/Ingestion failed: {e}")
+            print(f"[{dataset_name}] Moving raw CSV directly to archive: {archive_dest}")
             try:
-                # Read without schema enforcement to preserve raw data
-                raw_df = spark.read.option("header", "true").csv(source)
-                raw_df.write.mode("overwrite").parquet(quarantine)
-            except Exception as read_err:
-                print(f"[{dataset_name}] Error while quarantining: {read_err}")
+                move_s3_object(source, archive_dest)
+            except Exception as move_err:
+                print(f"[{dataset_name}] Error while archiving failed file: {move_err}")
             # Re-raise so Glue marks this job run as FAILED
             raise
 
