@@ -23,37 +23,6 @@ OmniRoute is a data platform that combines **batch ETL** and **real-time streami
 
 ![Data Warehouse Architecture](docs/assets/Data_Warehouse.svg)
 
-```
-                        ┌──────────────┐
-                        │  Kafka Topic │  (vehicle telemetry — speed, RPM, GPS)
-                        └──────┬───────┘
-                               │
-  CSV/JSON files on S3         │ Real-time stream
-  (vehicle_registry,           │
-   vehicle_assignment,         │
-   fuel_transactions,          ▼
-   maintenance_schedules) ──► ┌──────────────────────────────────────────────┐
-                              │            AWS EMR Cluster                   │
-                              │  ┌──────────┐ ┌──────────┐ ┌──────────┐     │
-                              │  │  Bronze   │ │  Silver  │ │   Gold   │     │
-                              │  │ Streaming │ │ Streaming│ │ Streaming│     │
-                              │  └──────────┘ └──────────┘ └──────────┘     │
-                              └──────────────────────────────────────────────┘
-                                               │
-  ┌────────────────────────────────────────────┼──────────────────────────┐
-  │                   AWS Glue (Batch ETL)     │                         │
-  │  ┌─────────┐   ┌──────────┐   ┌────────┐  │  ┌───────────────────┐  │
-  │  │ Bronze  │──►│  Silver  │──►│  Gold  │──┼─►│   PostgreSQL      │  │
-  │  │ Ingest  │   │Transform │   │Aggreg. │  │  │   (Reporting)     │  │
-  │  └─────────┘   └──────────┘   └────────┘  │  └───────────────────┘  │
-  └────────────────────────────────────────────┴──────────────────────────┘
-                               │
-                               ▼
-                    ┌───────────────────┐
-                    │   Apache Airflow  │  (Orchestration — 3 DAGs)
-                    └───────────────────┘
-```
-
 ### Key Technologies
 
 | Component | Technology |
