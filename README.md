@@ -21,6 +21,8 @@ OmniRoute is a data platform that combines **batch ETL** and **real-time streami
 
 ## Architecture
 
+![Data Warehouse Architecture](docs/assets/Data_Warehouse.svg)
+
 ```
                         ┌──────────────┐
                         │  Kafka Topic │  (vehicle telemetry — speed, RPM, GPS)
