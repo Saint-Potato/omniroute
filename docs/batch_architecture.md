@@ -33,14 +33,15 @@ Bronze Ingestion ──▶ S3 Bronze (Parquet)
   │                     ▼
   │               Silver Transforms ──▶ S3 Silver (Delta Lake)
   │                     │                    │
-  │                     ▼                    ▼
-  │               Gold Aggregations ──▶ S3 Gold (Delta Lake)
-  │                                          │
-  │                                          ▼
-  │                                     PostgreSQL
-  │                                    (report.*)
+  │                     │                    ▼
+  │                     │               Gold Aggregations ──▶ S3 Gold (Delta Lake)
+  │                     │                                          │
+  │                     │                                          ▼
+  │                     │                                     PostgreSQL
+  │                     │                                    (report.*)
+  │                     ▼
+  │               S3 Quarantine (rejected rows)
   ▼
-S3 Quarantine (rejected rows)
 S3 Archive (processed CSVs)
 ```
 
