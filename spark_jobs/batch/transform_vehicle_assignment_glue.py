@@ -714,11 +714,11 @@ def run(spark, run_date, bronze_base, silver_path, silver_vehicle_path,
                             "end_date":     lit(run_date).cast("date"),
                             "end_datetime": current_timestamp(),
                             "is_current":   lit(False),
-                            "status":       lit("PAUSED"),
+                            "status":       lit("ARCHIVED"),
                             "updated_at":   current_timestamp(),
                         }
                     )
-                    print(f"[dim_vehicle_assignment_scd2] ✓ Closed {requeue_count} Silver records with PAUSED status")
+                    print(f"[dim_vehicle_assignment_scd2] ✓ Closed {requeue_count} Silver records with ARCHIVED status")
 
                 # ── Permanent archive: VINs with no future end_date ──
                 if permanent_count > 0:
