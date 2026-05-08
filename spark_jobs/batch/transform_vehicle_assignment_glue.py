@@ -830,11 +830,11 @@ def run(spark, run_date, bronze_base, silver_path, silver_vehicle_path,
                                     "end_date":     lit(run_date).cast("date"),
                                     "end_datetime": current_timestamp(),
                                     "is_current":   lit(False),
-                                    "status":       lit("MAINTENANCE"),
+                                    "status":       lit("ARCHIVED"),
                                     "updated_at":   current_timestamp(),
                                 }
                             )
-                            print(f"[dim_vehicle_assignment_scd2] ✓ Closed {maint_requeue_count} Silver records with MAINTENANCE status")
+                            print(f"[dim_vehicle_assignment_scd2] ✓ Closed {maint_requeue_count} Silver records with ARCHIVED status")
 
                         if maint_permanent_count > 0:
                             maint_permanent_vins = [row["vin"] for row in maint_permanent.select("vin").distinct().collect()]
