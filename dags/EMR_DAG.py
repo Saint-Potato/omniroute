@@ -32,7 +32,7 @@ DAG Dependency Graph:
 
 from datetime import datetime, timedelta
 
-from airflow.sdk import DAG
+from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.amazon.aws.operators.emr import (
     EmrCreateJobFlowOperator,
@@ -47,23 +47,26 @@ from airflow.providers.amazon.aws.sensors.emr import EmrStepSensor
 # ──────────────────────────────────────────────────────────────
 AWS_CONN_ID = "aws_default"
 
-S3_BUCKET = "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/emr"
-BRONZE_SCRIPT = f"{S3_BUCKET}/bronze_streaming.py"
-SILVER_SCRIPT = f"{S3_BUCKET}/silver_streaming.py"
-GOLD_SCRIPT   = f"{S3_BUCKET}/gold_streaming.py"
-LIBS_ZIP      = f"{S3_BUCKET}/omniroute_libs.zip"
+# Airflow Variable `omniroute_config` = contents of config/s3_paths.json
+ARTIFACTS = Variable.get("omniroute_config", deserialize_json=True)["artifacts"]
+
+# Uploaded by spark_jobs/streaming/emr_package.sh (path ends in "/")
+EMR_ARTIFACTS_PATH = ARTIFACTS["emr"]
+BRONZE_SCRIPT    = f"{EMR_ARTIFACTS_PATH}bronze_streaming.py"
+SILVER_SCRIPT    = f"{EMR_ARTIFACTS_PATH}silver_streaming.py"
+GOLD_SCRIPT      = f"{EMR_ARTIFACTS_PATH}gold_streaming.py"
+LIBS_ZIP         = f"{EMR_ARTIFACTS_PATH}omniroute_libs.zip"
+BOOTSTRAP_SCRIPT = f"{EMR_ARTIFACTS_PATH}bootstrap_omniroute.sh"
 
 KAFKA_SERVER = "172.31.65.131:9092"
 
 # ──────────────────────────────────────────────────────────────
 # EMR Cluster Configuration
 # ──────────────────────────────────────────────────────────────
-BOOTSTRAP_SCRIPT = "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/emr/bootstrap_omniroute.sh"
-
 JOB_FLOW_OVERRIDES = {
     "Name": "poc-bootcamp-group5-streaming-cluster",
     "ReleaseLabel": "emr-7.12.0",
-    "LogUri": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/EMR-logs/",
+    "LogUri": ARTIFACTS["emr_logs"],
     "Applications": [
         {"Name": "Hadoop"},
         {"Name": "Hive"},

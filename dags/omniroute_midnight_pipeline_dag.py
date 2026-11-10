@@ -67,94 +67,91 @@ Monthly Retry Logic:
   monthly tasks are skipped for the rest of that month.
 """
 
-import json
-import os
 from datetime import datetime, timedelta
-from pathlib import Path
 
-from airflow.sdk import DAG
+from airflow.sdk import DAG, Variable
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import BranchPythonOperator, PythonOperator
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
-from airflow.models import Variable
 
 
 # ──────────────────────────────────────────────────────────────
-# Load Configuration from s3_paths.json
+# Configuration — Airflow Variable `omniroute_config`
+# (contents of config/s3_paths.json, read once per DAG-file parse)
 # ──────────────────────────────────────────────────────────────
-CONFIG_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent / "s3_paths.json"
+CONFIG = Variable.get("omniroute_config", deserialize_json=True)
 
-with open(CONFIG_PATH, "r") as f:
-    config = json.load(f)
-
-# ── Bronze S3 paths ──
-BRONZE_LANDING_PATH = config["bronze"]["landing"]
-BRONZE_INGESTED_PATH = config["bronze"]["ingested"]
-BRONZE_QUARANTINE_PATH = config["bronze"]["quarantine"]
-BRONZE_ARCHIVE_PATH = config["bronze"]["archive"]
-
-# ── Silver S3 paths ──
-SILVER_VEHICLE_REGISTRY_PATH = config["silver"]["tables"]["vehicle_registry"]
-SILVER_VEHICLE_ASSIGNMENT_PATH = config["silver"]["tables"]["vehicle_assignment"]
-SILVER_MAINTENANCE_PATH = config["silver"]["tables"]["dim_maintenance"]
-SILVER_DATE_PATH = config["silver"]["tables"]["dim_date"]
-
-# ── Gold S3 paths ──
-GOLD_FLEET_SNAPSHOT_PATH = config["gold"]["tables"]["active_fleet_snapshot"]
-GOLD_DAILY_SAFETY_SNAPSHOT_PATH = config["gold"]["tables"]["daily_safety_snapshot"]
-GOLD_MONTHLY_RATE_DEDUCTION_PATH = config["gold"]["tables"]["monthly_rate_deduction"]
-
-# ── Glue job configs — Daily ──
-GLUE_BRONZE = config["glue"]["jobs"]["bronze_ingest"]
-GLUE_SILVER_REGISTRY = config["glue"]["jobs"]["silver_vehicle_registry"]
-GLUE_SILVER_ASSIGNMENT = config["glue"]["jobs"]["silver_vehicle_assignment"]
-GLUE_SILVER_MAINTENANCE = config["glue"]["jobs"]["silver_maintenance_schedules"]
-GLUE_GOLD_FLEET_SNAPSHOT = config["glue"]["jobs"]["gold_active_fleet_snapshot"]
-GLUE_DAILY_SAFETY_SNAPSHOT = config["glue"]["jobs"]["daily_safety_snapshot"]
-
-# ── Glue job configs — Yearly ──
-GLUE_YEARLY_BRONZE = config["glue_yearly"]["jobs"]["bronze_ingest"]
-GLUE_SILVER_DIM_DATE = config["glue_yearly"]["jobs"]["dim_date"]
-
-# ── Glue job configs — Monthly ──
-GLUE_RATE_DEDUCTION = config["glue_monthly"]["jobs"]["monthly_rate_deduction_report"]
-GLUE_SAFETY_RESET = config["glue_monthly"]["jobs"]["safety_strikes_reset"]
-
+AWS_CONN_ID = "aws_default"
 RUN_DATE = "{{ ds }}"
 RUN_MONTH = "{{ logical_date.strftime('%Y-%m') }}"
-AWS_CONN_ID = "aws_default"
+
+
+def s3_path(layer, name):
+    """Full S3 prefix, ending in '/', for layers.<layer>.paths.<name>."""
+    cfg = CONFIG["layers"][layer]
+    return f"s3://{cfg['bucket']}/{cfg['prefix']}/{cfg['paths'][name]}/"
+
+
+# ── S3 paths used by this DAG ──
+BRONZE_ZONE_ARGS = {
+    "--landing_path": s3_path("bronze", "landing"),
+    "--ingested_path": s3_path("bronze", "ingested"),
+    "--quarantine_path": s3_path("bronze", "quarantine"),
+    "--archive_path": s3_path("bronze", "archive"),
+}
+BRONZE_INGESTED_PATH = BRONZE_ZONE_ARGS["--ingested_path"]
+
+SILVER_VEHICLE_REGISTRY_PATH = s3_path("silver", "vehicle_registry")
+SILVER_VEHICLE_ASSIGNMENT_PATH = s3_path("silver", "vehicle_assignment")
+SILVER_MAINTENANCE_PATH = s3_path("silver", "dim_maintenance")
+SILVER_DATE_PATH = s3_path("silver", "dim_date")
+
+GOLD_FLEET_SNAPSHOT_PATH = s3_path("gold", "active_fleet_snapshot")
+GOLD_DAILY_SAFETY_SNAPSHOT_PATH = s3_path("gold", "daily_safety_snapshot")
+GOLD_MONTHLY_RATE_DEDUCTION_PATH = s3_path("gold", "monthly_rate_deduction")
+
+# PostgreSQL connection, rendered from Airflow Variables at run time
+PG_ARGS = {
+    "--pg_host": "{{ var.value.pg_host }}",
+    "--pg_port": "{{ var.value.get('pg_port', '5432') }}",
+    "--pg_database": "{{ var.value.pg_database }}",
+    "--pg_user": "{{ var.value.pg_user }}",
+    "--pg_password": "{{ var.value.pg_password }}",
+}
 
 
 # ──────────────────────────────────────────────────────────────
-# Helper — Build GlueJobOperator with Delta Lake enabled
+# Helper — GlueJobOperator for glue.jobs.<job> (defaults + overrides)
 # ──────────────────────────────────────────────────────────────
-def build_glue_task(task_id, glue_config, script_args):
-    """Build a GlueJobOperator with Delta Lake enabled."""
+def build_glue_task(task_id, job, script_args, **operator_kwargs):
+    """GlueJobOperator for glue.jobs.<job>; extra kwargs (e.g. retry_delay) go to the operator."""
+    glue = CONFIG["glue"]
+    cfg = {**glue["defaults"], **glue["jobs"][job]}
     return GlueJobOperator(
         task_id=task_id,
-        job_name=glue_config["job_name"],
-        iam_role_name=glue_config["iam_role_name"],
-        region_name="us-east-1",
+        job_name=cfg["job_name"],
+        iam_role_name=cfg["iam_role_name"],
+        region_name=CONFIG["aws_region"],
+        aws_conn_id=AWS_CONN_ID,
+        concurrent_run_limit=cfg["max_concurrent_runs"],
         wait_for_completion=True,
         verbose=True,
         script_args=script_args,
         create_job_kwargs={
-            "GlueVersion": glue_config["glue_version"],
-            "NumberOfWorkers": glue_config["number_of_workers"],
-            "WorkerType": glue_config["worker_type"],
-            "Timeout": glue_config["timeout_minutes"],
-            "MaxRetries": glue_config.get("max_retries", 1),
+            "GlueVersion": cfg["glue_version"],
+            "NumberOfWorkers": cfg["number_of_workers"],
+            "WorkerType": cfg["worker_type"],
+            "Timeout": cfg["timeout_minutes"],
+            "MaxRetries": cfg["max_retries"],
             "MaxCapacity": None,
             "Command": {
                 "Name": "glueetl",
-                "ScriptLocation": glue_config["script_location"],
+                "ScriptLocation": CONFIG["artifacts"]["glue_scripts"][cfg["layer"]] + cfg["script"],
                 "PythonVersion": "3",
             },
-            "DefaultArguments": {
-                "--datalake-formats": "delta",
-                "--job-bookmark-option": "job-bookmark-disable",
-            },
+            "DefaultArguments": dict(cfg["default_arguments"]),
         },
+        **operator_kwargs,
     )
 
 
@@ -170,7 +167,7 @@ def check_yearly_needed(**context):
     year = execution_date.year
     var_name = f"omniroute_yearly_done_{year}"
 
-    yearly_done = Variable.get(var_name, default_var="false")
+    yearly_done = Variable.get(var_name, default="false")
     print(f"[yearly_check] Variable '{var_name}' = '{yearly_done}'")
 
     if yearly_done == "true":
@@ -204,7 +201,7 @@ def check_monthly_needed(**context):
     month_key = execution_date.strftime("%Y_%m")
     var_name = f"omniroute_monthly_done_{month_key}"
 
-    monthly_done = Variable.get(var_name, default_var="false")
+    monthly_done = Variable.get(var_name, default="false")
     print(f"[monthly_check] Variable '{var_name}' = '{monthly_done}'")
 
     if monthly_done == "true":
@@ -269,32 +266,15 @@ with DAG(
     skip_yearly = EmptyOperator(task_id="skip_yearly")
 
     # ── Yearly Bronze: Ingest maintenance_schedules.csv ──
-    yearly_bronze = GlueJobOperator(
+    yearly_bronze = build_glue_task(
         task_id="yearly_bronze_ingest",
-        job_name=GLUE_YEARLY_BRONZE["job_name"],
-        iam_role_name=GLUE_YEARLY_BRONZE["iam_role_name"],
-        script_location=GLUE_YEARLY_BRONZE["script_location"],
-        region_name="us-east-1",
-        create_job_kwargs={
-            "GlueVersion": GLUE_YEARLY_BRONZE["glue_version"],
-            "NumberOfWorkers": GLUE_YEARLY_BRONZE["number_of_workers"],
-            "WorkerType": GLUE_YEARLY_BRONZE["worker_type"],
-        },
-        script_args={
-            "--run_date": RUN_DATE,
-            "--landing_path": BRONZE_LANDING_PATH,
-            "--ingested_path": BRONZE_INGESTED_PATH,
-            "--quarantine_path": BRONZE_QUARANTINE_PATH,
-            "--archive_path": BRONZE_ARCHIVE_PATH,
-        },
-        wait_for_completion=True,
-        verbose=True,
-        aws_conn_id=AWS_CONN_ID,
+        job="bronze_ingestion_yearly",
+        script_args={"--run_date": RUN_DATE, **BRONZE_ZONE_ARGS},
     )
 
     silver_maintenance = build_glue_task(
         task_id="silver_maintenance_schedules",
-        glue_config=GLUE_SILVER_MAINTENANCE,
+        job="silver_maintenance_schedules",
         script_args={
             "--run_date": RUN_DATE,
             "--bronze_ingested_path": BRONZE_INGESTED_PATH,
@@ -304,7 +284,7 @@ with DAG(
 
     silver_dim_date = build_glue_task(
         task_id="silver_dim_date",
-        glue_config=GLUE_SILVER_DIM_DATE,
+        job="silver_dim_date",
         script_args={
             "--year": "{{ logical_date.year }}",
             "--silver_output_path": SILVER_DATE_PATH,
@@ -324,44 +304,26 @@ with DAG(
     # ══════════════════════════════════════════════════════════
     # DAILY — Bronze (registry + assignment) → Safety Snapshot
     # ══════════════════════════════════════════════════════════
-    daily_bronze_midnight = GlueJobOperator(
+    daily_bronze_midnight = build_glue_task(
         task_id="daily_bronze_midnight",
-        job_name=GLUE_BRONZE["job_name"],
-        iam_role_name=GLUE_BRONZE["iam_role_name"],
-        script_location=GLUE_BRONZE["script_location"],
-        region_name="us-east-1",
-        create_job_kwargs={
-            "GlueVersion": GLUE_BRONZE["glue_version"],
-            "NumberOfWorkers": GLUE_BRONZE["number_of_workers"],
-            "WorkerType": GLUE_BRONZE["worker_type"],
-        },
+        job="bronze_ingestion",
         script_args={
             "--run_date": RUN_DATE,
-            "--landing_path": BRONZE_LANDING_PATH,
-            "--ingested_path": BRONZE_INGESTED_PATH,
-            "--quarantine_path": BRONZE_QUARANTINE_PATH,
-            "--archive_path": BRONZE_ARCHIVE_PATH,
+            **BRONZE_ZONE_ARGS,
             "--datasets": "vehicle_registry,vehicle_assignment",
         },
-        wait_for_completion=True,
-        verbose=True,
-        aws_conn_id=AWS_CONN_ID,
         retries=2,
         retry_delay=timedelta(minutes=3),
     )
 
     daily_safety_snapshot = build_glue_task(
         task_id="daily_safety_snapshot",
-        glue_config=GLUE_DAILY_SAFETY_SNAPSHOT,
+        job="daily_safety_snapshot",
         script_args={
-            "--run_date":       RUN_DATE,
+            "--run_date": RUN_DATE,
             "--silver_assignment_path": SILVER_VEHICLE_ASSIGNMENT_PATH,
             "--gold_output_path": GOLD_DAILY_SAFETY_SNAPSHOT_PATH,
-            "--pg_host":     "{{ var.value.pg_host }}",
-            "--pg_port":     "{{ var.value.get('pg_port', '5432') }}",
-            "--pg_database": "{{ var.value.pg_database }}",
-            "--pg_user":     "{{ var.value.pg_user }}",
-            "--pg_password": "{{ var.value.pg_password }}",
+            **PG_ARGS,
         },
     )
 
@@ -370,7 +332,7 @@ with DAG(
     # ══════════════════════════════════════════════════════════
     silver_registry = build_glue_task(
         task_id="silver_vehicle_registry",
-        glue_config=GLUE_SILVER_REGISTRY,
+        job="silver_vehicle_registry",
         script_args={
             "--run_date": RUN_DATE,
             "--bronze_ingested_path": BRONZE_INGESTED_PATH,
@@ -380,24 +342,20 @@ with DAG(
 
     silver_assignment = build_glue_task(
         task_id="silver_vehicle_assignment",
-        glue_config=GLUE_SILVER_ASSIGNMENT,
+        job="silver_vehicle_assignment",
         script_args={
             "--run_date": RUN_DATE,
             "--bronze_ingested_path": BRONZE_INGESTED_PATH,
             "--silver_output_path": SILVER_VEHICLE_ASSIGNMENT_PATH,
             "--silver_vehicle_path": SILVER_VEHICLE_REGISTRY_PATH,
             "--silver_maintenance_path": SILVER_MAINTENANCE_PATH,
-            "--pg_host": "{{ var.value.pg_host }}",
-            "--pg_port": "{{ var.value.get('pg_port', '5432') }}",
-            "--pg_database": "{{ var.value.pg_database }}",
-            "--pg_user": "{{ var.value.pg_user }}",
-            "--pg_password": "{{ var.value.pg_password }}",
+            **PG_ARGS,
         },
     )
 
     gold_fleet_snapshot = build_glue_task(
         task_id="gold_active_fleet_snapshot",
-        glue_config=GLUE_GOLD_FLEET_SNAPSHOT,
+        job="gold_active_fleet_snapshot",
         script_args={
             "--run_date": RUN_DATE,
             "--silver_assignment_path": SILVER_VEHICLE_ASSIGNMENT_PATH,
@@ -418,27 +376,22 @@ with DAG(
 
     monthly_rate_deduction = build_glue_task(
         task_id="monthly_rate_deduction_report",
-        glue_config=GLUE_RATE_DEDUCTION,
+        job="monthly_rate_deduction_report",
         script_args={
-            "--run_month":          RUN_MONTH,
-            "--run_date":           RUN_DATE,
+            "--run_month": RUN_MONTH,
+            "--run_date": RUN_DATE,
             "--gold_snapshot_path": GOLD_DAILY_SAFETY_SNAPSHOT_PATH,
-            "--gold_output_path":   GOLD_MONTHLY_RATE_DEDUCTION_PATH,
+            "--gold_output_path": GOLD_MONTHLY_RATE_DEDUCTION_PATH,
         },
     )
 
     safety_strikes_reset = build_glue_task(
         task_id="safety_strikes_reset",
-        glue_config=GLUE_SAFETY_RESET,
+        job="monthly_safety_strikes_reset",
         script_args={
-            "--run_month":              RUN_MONTH,
-            "--run_date":               RUN_DATE,
-            # PostgreSQL connection (injected via Airflow Variables)
-            "--pg_host":     "{{ var.value.pg_host }}",
-            "--pg_port":     "{{ var.value.get('pg_port', '5432') }}",
-            "--pg_database": "{{ var.value.pg_database }}",
-            "--pg_user":     "{{ var.value.pg_user }}",
-            "--pg_password": "{{ var.value.pg_password }}",
+            "--run_month": RUN_MONTH,
+            "--run_date": RUN_DATE,
+            **PG_ARGS,
         },
     )
 

@@ -1,194 +1,148 @@
 {
     "project": "omniroute",
-    "description": "S3 path configuration for the OmniRoute Logistics Data Pipeline (Medallion Architecture)",
-    "bronze": {
-        "description": "Raw data layer — CSV landing, validated Parquet, and quarantined rejects",
-        "base_bucket": "s3://ttn-de-bootcamp-bronze-us-east-1",
-        "base_prefix": "poc-bootcamp-group5-bronze",
-        "landing": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/landing/",
-        "ingested": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/ingested/",
-        "quarantine": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine/",
-        "archive": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/archive/"
-    },
-    "silver": {
-        "description": "Cleansed & enriched layer — Delta Lake tables with dedup, type-casting, and business rules",
-        "base_bucket": "s3://ttn-de-bootcamp-silver-us-east-1",
-        "base_prefix": "poc-bootcamp-group5-silver",
-        "tables": {
-            "fuel_transactions": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/silver.fuel_transactions/",
-            "dim_maintenance": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/silver.dim_maintenance/",
-            "dim_date": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/silver.dim_date/",
-            "telemetry": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/silver.telemetry/",
-            "vehicle_assignment": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/silver.vehicle_assignment/",
-            "vehicle_registry": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/silver.vehicle_registry/"
+    "description": "S3 layout and Glue job configuration for the OmniRoute Logistics Data Pipeline (Medallion Architecture). Stored in Airflow as the JSON Variable `omniroute_config` (source of truth: config/s3_paths.json in the repo; EMR reads a copy uploaded by emr_package.sh). Data paths are relative to their layer's bucket/prefix; DAGs resolve them with their s3_path() helper. Code artifacts live separately under `artifacts`.",
+    "aws_region": "us-east-1",
+
+    "layers": {
+        "bronze": {
+            "description": "Raw data layer — CSV landing, validated Parquet, quarantined rejects and streaming checkpoints",
+            "bucket": "snowflake-logs-bucket-jai",
+            "prefix": "test-data",
+            "paths": {
+                "landing": "landing",
+                "ingested": "ingested",
+                "quarantine": "quarantine",
+                "archive": "archive",
+                "checkpoints": "checkpoints"
+            }
+        },
+        "silver": {
+            "description": "Cleansed & enriched layer — Delta Lake tables with dedup, type-casting and business rules",
+            "bucket": "snowflake-logs-bucket-jai",
+            "prefix": "test-data/silver",
+            "paths": {
+                "dim_date": "silver.dim_date",
+                "dim_maintenance": "silver.dim_maintenance",
+                "fuel_transactions": "silver.fuel_transactions",
+                "telemetry": "telemetry",
+                "vehicle_assignment": "silver.vehicle_assignment",
+                "vehicle_registry": "silver.vehicle_registry"
+            }
+        },
+        "gold": {
+            "description": "Business-level aggregates — fuel efficiency audit, fleet & safety snapshots, rate deductions",
+            "bucket": "snowflake-logs-bucket-jai",
+            "prefix": "test-data/gold",
+            "paths": {
+                "active_fleet_snapshot": "gold.active_fleet_snapshot",
+                "daily_safety_snapshot": "gold.daily_safety_snapshot",
+                "fuel_efficiency_audit": "gold.fuel_efficiency_audit",
+                "monthly_rate_deduction": "gold.monthly_rate_deduction",
+                "telemetry_strike": "gold.telemetry_strike"
+            }
         }
     },
-    "gold": {
-        "description": "Business-level aggregates — fuel efficiency audit, active fleet snapshot",
-        "base_bucket": "s3://ttn-de-bootcamp-gold-us-east-1",
-        "base_prefix": "poc-bootcamp-group5-gold",
-        "tables": {
-            "fuel_efficiency_audit": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/gold.fuel_efficiency_audit/",
-            "active_fleet_snapshot": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/gold.active_fleet_snapshot/",
-            "daily_safety_snapshot": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/gold.daily_safety_snapshot/",
-            "monthly_rate_deduction": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/gold.monthly_rate_deduction/"
-        }
+
+    "artifacts": {
+        "description": "Code & deployment artifacts, kept apart from `layers` so data can move without moving code. emr/ must match the bootstrap location hardcoded in spark_jobs/streaming/*.py and emr_package.sh.",
+        "glue_scripts": {
+            "bronze": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/glue-scripts/",
+            "silver": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/glue-scripts/",
+            "gold": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/"
+        },
+        "emr": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/emr/",
+        "emr_logs": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/EMR-logs/"
     },
+
     "glue": {
-        "description": "AWS Glue job configuration — referenced by Airflow DAGs",
+        "description": "Glue jobs are keyed by job name minus the group suffix. Each job inherits `defaults`; any key set on a job replaces the default. A job's script lives at artifacts.glue_scripts.<layer> + <script>.",
+        "defaults": {
+            "iam_role_name": "AWSGlueRole",
+            "glue_version": "4.0",
+            "worker_type": "G.1X",
+            "number_of_workers": 2,
+            "timeout_minutes": 30,
+            "max_retries": 1,
+            "max_concurrent_runs": 1,
+            "default_arguments": {
+                "--datalake-formats": "delta",
+                "--job-bookmark-option": "job-bookmark-disable"
+            }
+        },
         "jobs": {
-            "bronze_ingest": {
+            "bronze_ingestion": {
                 "job_name": "bronze_ingestion_group5",
-                "script_location": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/glue-scripts/bronze_ingestion_group5.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+                "layer": "bronze",
+                "script": "bronze_ingestion_group5.py",
+                "default_arguments": {
+                    "--job-bookmark-option": "job-bookmark-disable"
+                }
             },
-            "silver_vehicle_registry": {
-                "job_name": "silver_vehicle_registry_group5",
-                "script_location": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/glue-scripts/transform_vehicle_registry_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+            "bronze_ingestion_yearly": {
+                "job_name": "bronze_ingestion_group5_yearly",
+                "layer": "bronze",
+                "script": "bronze_ingestion_group5.py",
+                "default_arguments": {
+                    "--job-bookmark-option": "job-bookmark-disable"
+                }
             },
-            "silver_vehicle_assignment": {
-                "job_name": "silver_vehicle_assignment_group5",
-                "script_location": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/glue-scripts/transform_vehicle_assignment_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
-            },
-            "silver_fuel_transactions": {
-                "job_name": "silver_fuel_transactions_group5",
-                "script_location": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/glue-scripts/transform_fuel_transactions_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+            "silver_dim_date": {
+                "job_name": "silver_dim_date_group5",
+                "layer": "silver",
+                "script": "transform_dim_date_glue.py",
+                "timeout_minutes": 15
             },
             "silver_maintenance_schedules": {
                 "job_name": "silver_maintenance_schedules_group5",
-                "script_location": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/glue-scripts/transform_maintenance_schedules_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+                "layer": "silver",
+                "script": "transform_maintenance_schedules_glue.py"
             },
-            "gold_fuel_efficiency_audit": {
-                "job_name": "gold_fuel_efficiency_audit_group5",
-                "script_location": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/gold_fuel_efficiency_audit_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+            "silver_vehicle_registry": {
+                "job_name": "silver_vehicle_registry_group5",
+                "layer": "silver",
+                "script": "transform_vehicle_registry_glue.py"
+            },
+            "silver_vehicle_assignment": {
+                "job_name": "silver_vehicle_assignment_group5",
+                "layer": "silver",
+                "script": "transform_vehicle_assignment_glue.py"
+            },
+            "silver_fuel_transactions": {
+                "job_name": "silver_fuel_transactions_group5",
+                "layer": "silver",
+                "script": "transform_fuel_transactions_glue.py"
             },
             "gold_active_fleet_snapshot": {
                 "job_name": "gold_active_fleet_snapshot_group5",
-                "script_location": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/gold_active_fleet_snapshot_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+                "layer": "gold",
+                "script": "gold_active_fleet_snapshot_glue.py"
+            },
+            "gold_fuel_efficiency_audit": {
+                "job_name": "gold_fuel_efficiency_audit_group5",
+                "layer": "gold",
+                "script": "gold_fuel_efficiency_audit_glue.py"
             },
             "gold_to_postgres": {
                 "job_name": "gold_to_postgres_group5",
-                "script_location": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/gold_to_postgres_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+                "layer": "gold",
+                "script": "gold_to_postgres_glue.py"
             },
             "daily_safety_snapshot": {
                 "job_name": "daily_safety_snapshot_group5",
-                "script_location": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/daily_safety_snapshot_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 15,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
-            }
-        }
-    },
-    "glue_yearly": {
-        "description": "AWS Glue job configuration — yearly jobs referenced by Airflow DAGs",
-        "jobs": {
-            "bronze_ingest": {
-                "job_name": "bronze_ingestion_group5_yearly",
-                "script_location": "s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/glue-scripts/bronze_ingestion_group5.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
-            },
-            "dim_date": {
-                "job_name": "silver_dim_date_group5",
-                "script_location": "s3://ttn-de-bootcamp-silver-us-east-1/poc-bootcamp-group5-silver/glue-scripts/transform_dim_date_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 15,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
-            }
-        }
-    },
-    "glue_monthly": {
-        "description": "AWS Glue job configuration — monthly jobs referenced by Airflow DAGs",
-        "jobs": {
-            "safety_strikes_reset": {
-                "job_name": "monthly_safety_strikes_reset_group5",
-                "script_location": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/monthly_safety_strikes_reset_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 30,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+                "layer": "gold",
+                "script": "daily_safety_snapshot_glue.py",
+                "timeout_minutes": 15
             },
             "monthly_rate_deduction_report": {
                 "job_name": "monthly_rate_deduction_report_group5",
-                "script_location": "s3://ttn-de-bootcamp-gold-us-east-1/poc-bootcamp-group5-gold/glue-scripts/monthly_rate_deduction_report_glue.py",
-                "iam_role_name": "SSM-Role-TTN-Bootcamp-2026-Role",
-                "glue_version": "4.0",
-                "worker_type": "G.1X",
-                "number_of_workers": 2,
-                "timeout_minutes": 45,
-                "max_retries": 1,
-                "max_concurrent_runs": 1
+                "layer": "gold",
+                "script": "monthly_rate_deduction_report_glue.py",
+                "timeout_minutes": 45
+            },
+            "monthly_safety_strikes_reset": {
+                "job_name": "monthly_safety_strikes_reset_group5",
+                "layer": "gold",
+                "script": "monthly_safety_strikes_reset_glue.py"
             }
         }
     }
