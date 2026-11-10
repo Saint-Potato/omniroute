@@ -69,11 +69,17 @@ except Exception as _e:
     logger.critical(f"Cannot load s3_paths.json: {_e}")
     sys.exit(1)
 
+def _s3_path(layer, name):
+    """Full S3 prefix, ending in '/', for layers.<layer>.paths.<name> in s3_paths.json."""
+    cfg = _S3["layers"][layer]
+    return f"s3://{cfg['bucket']}/{cfg['prefix']}/{cfg['paths'][name]}/"
+
+
 # ── S3 Paths ──
 # Using telemetry2 to avoid clashes, but keeping Parquet format
-BRONZE_TELEMETRY_PATH = _S3["bronze"]["ingested"].rstrip("/") + "/telemetry"
-CHECKPOINT_PATH_BRONZE = _S3["bronze"]["base_bucket"].rstrip("/") + "/" + _S3["bronze"]["base_prefix"] + "/checkpoints/telemetry_parquet"
-DLQ_QUARANTINE_PATH = _S3["bronze"]["quarantine"].rstrip("/") + "/telemetry_dlq"
+BRONZE_TELEMETRY_PATH = _s3_path("bronze", "ingested") + "telemetry"
+CHECKPOINT_PATH_BRONZE = _s3_path("bronze", "checkpoints") + "telemetry_parquet"
+DLQ_QUARANTINE_PATH = _s3_path("bronze", "quarantine") + "telemetry_dlq"
 
 # ── Kafka Config ──
 KAFKA_SERVER = os.getenv("KAFKA_SERVER", "172.31.65.131:9092")

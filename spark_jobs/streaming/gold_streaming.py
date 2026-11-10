@@ -93,12 +93,18 @@ except Exception as _e:
     logger.critical(f"Cannot load s3_paths.json: {_e}")
     sys.exit(1)
 
+def _s3_path(layer, name):
+    """Full S3 prefix, ending in '/', for layers.<layer>.paths.<name> in s3_paths.json."""
+    cfg = _S3["layers"][layer]
+    return f"s3://{cfg['bucket']}/{cfg['prefix']}/{cfg['paths'][name]}/"
+
+
 # ── S3 Paths ──
-SILVER_TELEMETRY_PATH = _S3["silver"]["base_bucket"].rstrip("/") + "/" + _S3["silver"]["base_prefix"].rstrip("/") + "/telemetry"
-CHECKPOINT_PATH_GOLD  = _S3["bronze"]["base_bucket"].rstrip("/") + "/" + _S3["bronze"]["base_prefix"].rstrip("/") + "/checkpoints/gold_streaming_parquet"
-GOLD_STRIKE_PATH = _S3["gold"]["base_bucket"].rstrip("/") + "/" + _S3["gold"]["base_prefix"].rstrip("/") + "/gold.telemetry_strike"
-VEHICLE_ASSIGNMENT_PATH = _S3["silver"]["tables"]["vehicle_assignment"].rstrip("/")
-VEHICLE_REGISTRY_PATH = _S3["silver"]["tables"]["vehicle_registry"].rstrip("/")
+SILVER_TELEMETRY_PATH = _s3_path("silver", "telemetry").rstrip("/")
+CHECKPOINT_PATH_GOLD  = _s3_path("bronze", "checkpoints") + "gold_streaming_parquet"
+GOLD_STRIKE_PATH = _s3_path("gold", "telemetry_strike").rstrip("/")
+VEHICLE_ASSIGNMENT_PATH = _s3_path("silver", "vehicle_assignment").rstrip("/")
+VEHICLE_REGISTRY_PATH = _s3_path("silver", "vehicle_registry").rstrip("/")
 
 # ── Postgres Config ──
 PG_CONN_STR = (
