@@ -67,7 +67,7 @@ The morning DAG depends on the midnight DAG via `ExternalTaskSensor` (currently 
 | Storage           | Amazon S3                                        |
 | Database          | PostgreSQL (EC2, `report.*` schema)              |
 | Region            | `us-east-1`                                      |
-| Config Source      | `s3_paths.json` (loaded at DAG parse time)       |
+| Config Source      | Airflow Variable `omniroute_config` (contents of `s3_paths.json`, read at DAG parse time) |
 
 ---
 
@@ -343,42 +343,69 @@ Successfully processed source CSVs are moved from the landing zone to `s3://.../
 
 ### S3 Path Configuration (`s3_paths.json`)
 
-All S3 paths and Glue job configs are loaded from `s3_paths.json` at DAG parse time:
+`config/s3_paths.json` holds all S3 paths and Glue job configs. Airflow does not read the
+file: its contents are pasted into the JSON Airflow Variable `omniroute_config`, which
+each DAG file reads once per parse. Each value is defined
+once; full URIs are derived:
 
 ```
 s3_paths.json
-├── bronze.landing          # CSV landing zone
-├── bronze.ingested         # Validated Parquet
-├── bronze.quarantine       # Rejected rows
-├── bronze.archive          # Processed CSV archive
-├── silver.tables.*         # Delta Lake tables per dimension/fact
-├── gold.tables.*           # Delta Lake tables per aggregate
-├── glue.jobs.*             # Daily Glue job configs (name, IAM role, workers, timeout)
-├── glue_yearly.jobs.*      # Yearly Glue job configs
-└── glue_monthly.jobs.*     # Monthly Glue job configs
+├── aws_region
+├── layers.<bronze|silver|gold>
+│   ├── bucket              # e.g. snowflake-logs-bucket-jai
+│   ├── prefix              # e.g. test-data/silver
+│   └── paths.<name>        # data, relative to bucket/prefix (zones, tables, checkpoints)
+├── artifacts               # code, kept apart from data
+│   ├── glue_scripts.<layer>  # full S3 prefix holding that layer's Glue scripts
+│   ├── emr                 # streaming scripts, bootstrap, libs zip, EMR copy of s3_paths.json
+│   └── emr_logs            # EMR cluster LogUri
+└── glue
+    ├── defaults            # settings shared by every job
+    └── jobs.<key>          # per-job: job_name, layer, script + any overrides
+```
+
+After editing `config/s3_paths.json`, update the Variable (UI: **Admin → Variables**, or
+`airflow variables set omniroute_config "$(cat config/s3_paths.json)"`) and re-run
+`emr_package.sh` so EMR's S3 copy matches.
+
+Each batch DAG is self-contained: it loads the Variable into `CONFIG` and defines its own
+`s3_path()` and `build_glue_task()` helpers (the EMR DAG only reads `CONFIG["artifacts"]`):
+
+```python
+s3_path("silver", "dim_date")
+# → "s3://snowflake-logs-bucket-jai/test-data/silver/silver.dim_date/"
+
+build_glue_task(task_id="silver_dim_date", job="silver_dim_date", script_args={...})
 ```
 
 ### Glue Job Config Schema
 
-Each Glue job entry in `s3_paths.json` follows this structure:
+Job keys are the Glue job name without the `_group5` suffix. A job entry only lists what
+differs from `glue.defaults`; any key it sets replaces the default (including
+`default_arguments`, which bronze jobs override to drop `--datalake-formats delta`).
 
 ```json
-{
-  "job_name": "omniroute-silver-vehicle-registry",
-  "iam_role_name": "GlueETLRole",
-  "script_location": "s3://bucket/scripts/transform_vehicle_registry_glue.py",
-  "glue_version": "4.0",
-  "number_of_workers": 2,
-  "worker_type": "G.1X",
-  "timeout_minutes": 30,
-  "max_retries": 1
+"silver_dim_date": {
+  "job_name": "silver_dim_date_group5",
+  "layer": "silver",
+  "script": "transform_dim_date_glue.py",
+  "timeout_minutes": 15
 }
 ```
+
+The script location is derived as `artifacts.glue_scripts.<layer>` + `script`. Code
+artifacts are deliberately separate from `layers`, so data can be relocated without
+re-uploading scripts or recreating Glue jobs.
+
+> `create_job_kwargs` (workers, timeout, etc.) are only applied when Airflow **creates** a
+> Glue job. Existing jobs keep their current settings unless updated in the Glue console
+> or the operator is run with `update_config=True`.
 
 ### Airflow Variables
 
 | Variable                          | Type    | Purpose                                        |
 | --------------------------------- | ------- | ---------------------------------------------- |
+| `omniroute_config`                | JSON    | Pipeline config — contents of `config/s3_paths.json` |
 | `omniroute_yearly_done_YYYY`      | String  | Yearly task completion flag (`"true"/"false"`)  |
 | `omniroute_monthly_done_YYYY_MM`  | String  | Monthly task completion flag (`"true"/"false"`) |
 | `pg_host`                         | String  | PostgreSQL host (EC2 private IP)                |

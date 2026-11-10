@@ -29,6 +29,14 @@ os.makedirs(PROCESSED_DIR, exist_ok=True)
 os.makedirs(TELEMETRY_RAW_DIR, exist_ok=True)
 
 # ================================
+# S3 LANDING ZONE (producers upload here)
+# ================================
+# Must match layers.bronze bucket/prefix + paths.landing in s3_paths.json.
+
+S3_LANDING_BUCKET = "snowflake-logs-bucket-jai"
+S3_LANDING_PREFIX = "test-data/landing"
+
+# ================================
 # RAW FILE PATHS
 # ================================
 # Note: These are the canonical paths for raw data files.

@@ -124,7 +124,7 @@ The `report` schema in PostgreSQL serves as the downstream reporting sink. Full 
 ```
 omniroute/
 ├── config/
-│   ├── s3_paths.json                 # S3 paths + Glue job configuration
+│   ├── s3_paths.json                 # S3 paths + Glue job config (→ Airflow Variable omniroute_config)
 │   ├── airflow_variables.json        # Airflow Variables (PG creds, EMR subnet, etc.)
 │   └── airflow_connections.json      # Airflow Connections (aws_default)
 │
@@ -198,10 +198,12 @@ psql -h <host> -U omniroute_user -d omniroute_reporting -f sql/reporting_ddl.sql
 
 # 4. Configure Airflow
 airflow variables import config/airflow_variables.json
+airflow variables set omniroute_config "$(cat config/s3_paths.json)"
 airflow connections import config/airflow_connections.json
 
 # 5. Deploy Glue scripts to S3
-# Upload each script in spark_jobs/batch/ to its s3_paths.json script_location
+# Upload each script in spark_jobs/batch/ to artifacts.glue_scripts.<layer> + <script>,
+# using the layer + script listed for it under glue.jobs in s3_paths.json
 
 # 6. Deploy streaming scripts
 cd spark_jobs/streaming

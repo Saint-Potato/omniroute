@@ -418,15 +418,18 @@ last_strike_ts   : double    (cooldown reference timestamp)
 
 ### S3 Paths (from `s3_paths.json`)
 
-| Key                                  | Layer  | Usage                    |
-| ------------------------------------ | ------ | ------------------------ |
-| `bronze.ingested` + `/telemetry`     | Bronze → Silver | Bronze Parquet output / Silver source |
-| `bronze.quarantine` + `/telemetry_dlq` | Bronze | DLQ quarantine           |
-| `bronze.base_*` + `/checkpoints/*`   | All    | Checkpoint locations     |
-| `silver.base_*` + `/telemetry`       | Silver → Gold | Silver Parquet output / Gold source |
-| `silver.tables.vehicle_assignment`   | Silver, Gold | SCD2 reference data   |
-| `silver.tables.vehicle_registry`     | Gold   | Vehicle registry reference |
-| `gold.base_*` + `/gold.telemetry_strike` | Gold | Gold strike output    |
+Each script resolves `layers.<layer>.paths.<name>` with a local `_s3_path(layer, name)` helper
+(`s3://<bucket>/<prefix>/<path>/`).
+
+| `_s3_path(...)`                              | Layer  | Usage                    |
+| -------------------------------------------- | ------ | ------------------------ |
+| `("bronze", "ingested")` + `telemetry`       | Bronze → Silver | Bronze Parquet output / Silver source |
+| `("bronze", "quarantine")` + `telemetry_dlq` | Bronze | DLQ quarantine           |
+| `("bronze", "checkpoints")` + `<stream>`     | All    | Checkpoint locations     |
+| `("silver", "telemetry")`                    | Silver → Gold | Silver Parquet output / Gold source |
+| `("silver", "vehicle_assignment")`           | Silver, Gold | SCD2 reference data   |
+| `("silver", "vehicle_registry")`             | Gold   | Vehicle registry reference |
+| `("gold", "telemetry_strike")`               | Gold   | Gold strike output       |
 
 ### Kafka Topics
 

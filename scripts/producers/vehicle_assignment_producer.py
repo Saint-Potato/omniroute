@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 import boto3
 
 from config import (
+    S3_LANDING_BUCKET,
+    S3_LANDING_PREFIX,
     VEHICLE_REGISTRY_FILE,
     VEHICLE_ASSIGNMENT_RAW_FILE,
     VEHICLE_ASSIGNMENT_CONFIG,
@@ -22,10 +24,10 @@ from config import (
 )
 
 # ================================
-# S3 CONFIG — matches s3_paths.json landing path
+# S3 CONFIG — landing zone from config.py (mirrors s3_paths.json)
 # ================================
-S3_BUCKET  = "ttn-de-bootcamp-bronze-us-east-1"
-S3_KEY     = "poc-bootcamp-group5-bronze/landing/vehicle_assignment.csv"
+S3_BUCKET  = S3_LANDING_BUCKET
+S3_KEY     = f"{S3_LANDING_PREFIX}/vehicle_assignment.csv"
 S3_LANDING = f"s3://{S3_BUCKET}/{S3_KEY}"
 
 # ================================

@@ -13,16 +13,18 @@ import random
 import boto3
 
 from config import (
+    S3_LANDING_BUCKET,
+    S3_LANDING_PREFIX,
     RESTRICTED_ZONES_RAW_FILE,
     ZONES_CONFIG,
     DATA_DIR
 )
 
 # ================================
-# S3 CONFIG — matches s3_paths.json landing path
+# S3 CONFIG — landing zone from config.py (mirrors s3_paths.json)
 # ================================
-S3_BUCKET  = "ttn-de-bootcamp-bronze-us-east-1"
-S3_KEY     = "poc-bootcamp-group5-bronze/landing/restricted_zones.json"
+S3_BUCKET  = S3_LANDING_BUCKET
+S3_KEY     = f"{S3_LANDING_PREFIX}/restricted_zones.json"
 S3_LANDING = f"s3://{S3_BUCKET}/{S3_KEY}"
 
 # ================================

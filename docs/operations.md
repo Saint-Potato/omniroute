@@ -36,6 +36,12 @@ airflow variables import config/airflow_variables.json
 |---|---|---|
 | `emr_subnet_id` | `subnet-0abc123def456` | VPC subnet used when provisioning the EMR cluster. Must have outbound internet access for package downloads and S3 connectivity. |
 
+### Pipeline Config Variable
+
+| Variable | Example | Description |
+|---|---|---|
+| `omniroute_config` | contents of `config/s3_paths.json` | JSON with all S3 paths and Glue job settings. Read when DAG files are parsed; if missing or invalid, all three DAGs show an import error. Update it with `airflow variables set omniroute_config "$(cat config/s3_paths.json)"` after editing the file. |
+
 ### PostgreSQL Variables
 
 These are injected into Glue jobs at runtime via Jinja templating (`{{ var.value.pg_host }}`).
@@ -330,10 +336,10 @@ psql -h <host> -U omniroute_user -d omniroute_reporting -f sql/reporting_ddl.sql
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Script not found at location` | Script not uploaded to the S3 path in `s3_paths.json` | Upload the script: `aws s3 cp spark_jobs/batch/<script>.py s3://<script_location>` |
+| `Script not found at location` | Script not uploaded to the job's derived script location | Upload the script: `aws s3 cp spark_jobs/batch/<script>.py <artifacts.glue_scripts.<layer>><script>` (layer + script from `glue.jobs.<key>` in `s3_paths.json`) |
 | `AnalysisException: Path does not exist` | Input data missing at the expected S3 path | Verify upstream jobs ran and the data exists at the Bronze/Silver path. |
 | `MERGE INTO ... target table not found` | First run — Delta table hasn't been created yet | The Silver transforms auto-create the table on first write. Check for other errors in the logs. |
-| `GlueVersion not supported` | Wrong Glue version in `s3_paths.json` | Ensure `glue_version` is `"4.0"` for all batch jobs. |
+| `GlueVersion not supported` | Wrong Glue version in `s3_paths.json` | Ensure `glue.defaults.glue_version` is `"4.0"` and no job overrides it. |
 | `Max concurrent runs exceeded` | Previous job run is still in progress | Wait for the existing run to finish or cancel it in the Glue console. |
 
 #### Retry behavior
@@ -372,13 +378,13 @@ psql -h <pg_host> -p <pg_port> -U <pg_user> -d <pg_database> -c "SELECT 1;"
 Records that fail schema validation during Bronze ingestion are written to:
 
 ```
-s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine/
+s3://snowflake-logs-bucket-jai/test-data/quarantine/
 ```
 
 Check quarantined data to understand what was rejected:
 
 ```bash
-aws s3 ls s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/quarantine/ --recursive
+aws s3 ls s3://snowflake-logs-bucket-jai/test-data/quarantine/ --recursive
 ```
 
 #### Missing landing files
@@ -388,7 +394,7 @@ If Bronze ingestion finds no files, the task will succeed with 0 records process
 Check that source files are being deposited to the landing zone:
 
 ```bash
-aws s3 ls s3://ttn-de-bootcamp-bronze-us-east-1/poc-bootcamp-group5-bronze/landing/
+aws s3 ls s3://snowflake-logs-bucket-jai/test-data/landing/
 ```
 
 #### Delta Lake table corruption

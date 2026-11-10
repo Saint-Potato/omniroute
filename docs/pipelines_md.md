@@ -267,20 +267,24 @@ termination.
 
 ### `s3_paths.json`
 
-Both batch DAGs (`midnight_pipeline` and `morning_fuel_pipeline`) load all S3 paths and
-Glue job configurations from a shared `s3_paths.json` file located one directory above
-the DAGs folder. If this file is missing or malformed, both DAGs will fail at parse
-time before any task runs.
+All three DAGs load S3 paths and Glue job configurations from the JSON Airflow Variable
+`omniroute_config` (the contents of `config/s3_paths.json`), read at the top of each DAG
+file. If the Variable is missing or not valid JSON, the DAGs
+fail at parse time with an import error naming the Variable, before any task runs.
+See [batch_architecture.md](batch_architecture.md#configuration-reference) for the schema.
 
 ### Glue Job Convention
 
-All Glue tasks are built with Delta Lake enabled via the `DefaultArguments` block:
+Every Glue task is built by the DAG's `build_glue_task(task_id, job, script_args)` helper,
+which reads `glue.jobs.<job>` merged over `glue.defaults`. The default `DefaultArguments`
+enable Delta Lake:
 
 ```python
 "--datalake-formats": "delta",
 "--job-bookmark-option": "job-bookmark-disable",
 ```
 
+Bronze ingestion jobs write plain Parquet, so they override this to bookmark-disable only.
 Job bookmarks are intentionally disabled — idempotency is handled at the script level,
 not by Glue's bookmark mechanism.
 
